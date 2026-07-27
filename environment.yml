@@ -1,0 +1,32 @@
+name: ultron
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.12
+  - pip
+  - git
+  - cmake
+  - ffmpeg
+
+  - pip:
+      - fastapi
+      - uvicorn
+      - sqlalchemy
+      - psycopg2-binary
+      - alembic
+      - pydantic
+      - pydantic-settings
+      - python-dotenv
+      - python-multipart
+      - aiofiles
+      - loguru
+      - redis
+      - celery
+      - langchain
+      - langgraph
+      - openai
+      - qdrant-client
+      - neo4j
