@@ -7,13 +7,15 @@ class Settings(BaseSettings):
 
     VERSION: str = "1.0.0"
 
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite:///./ultron.db"
 
-    OPENAI_API_KEY: str = ""
+    GROQ_API_KEY: str
 
-    REDIS_URL: str
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
-    SECRET_KEY: str
+    REDIS_URL: str = "redis://localhost:6379"
+
+    SECRET_KEY: str = "ultron-development-secret"
 
     ALGORITHM: str = "HS256"
 
