@@ -1,0 +1,6 @@
+SpeechRecognition
+PyAudio
+NLTK
+PyTTSX3
+spaCy
+unittest
