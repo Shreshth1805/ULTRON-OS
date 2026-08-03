@@ -115,3 +115,24 @@ def delete_conversation(
         "success": True,
         "message": "Conversation memory cleared."
     }
+
+class ProjectRequest(BaseModel):
+
+    project_name: str
+
+    description: str
+
+@router.post("/project/build")
+def build_project(
+
+    request: ProjectRequest
+
+):
+
+    return software_engineer_agent.build_project(
+
+        request.project_name,
+
+        request.description
+
+    )    

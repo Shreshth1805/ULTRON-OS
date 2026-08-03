@@ -1,72 +1,95 @@
-from app.core.llm import llm
+from app.agents.software_engineer.planner import planner
+
+from app.agents.software_engineer.generator import generator
+
+from app.agents.software_engineer.reviewer import reviewer
+
+from app.agents.software_engineer.executor import executor
+
+from app.workspace.file_manager import (
+    write_project_file
+)
 
 
 class SoftwareEngineerAgent:
 
-    def generate_code(
+    def build_project(
+
         self,
-        code: str,
-        filename: str = "main.py"
+
+        project_name,
+
+        description
+
     ):
 
-        prompt = f"""
-You are ULTRON, an AI software engineer.
+        plan = planner.create_plan(description)
 
-Generate clean, production-quality code.
+        files = [
 
-Requested task:
-{code}
+            "README.md",
 
-Target filename:
-{filename}
+            "requirements.txt",
 
-Return ONLY the code.
-Do not use Markdown code fences.
-Do not explain the code.
-"""
+            "main.py"
 
-        response = llm.invoke(prompt)
+        ]
 
-        generated_code = response.content
+        generated = {}
 
-        return {
-            "filename": filename,
-            "code": generated_code
-        }
+        for file in files:
 
+            code = generator.generate_file(
 
-    def test_code(self, code: str):
+                filename=file,
 
-        prompt = f"""
-You are a senior software engineer.
+                project_description=description,
 
-Review the following code:
+                project_plan=plan
 
-{code}
-
-Identify:
-1. Syntax errors
-2. Logical errors
-3. Potential bugs
-4. Improvements
-
-Give a concise technical review.
-"""
-
-        response = llm.invoke(prompt)
-
-        return {
-            "review": response.content
-        }
-    def run(
-            self,
-            message: str
-        ):
-
-            return self.generate_code(
-                code=message,
-                filename="generated.py"
             )
+
+            write_project_file(
+
+                project_name,
+
+                file,
+
+                code
+
+            )
+
+            generated[file] = code
+
+        return {
+
+            "success": True,
+
+            "plan": plan,
+
+            "files": list(generated.keys())
+
+        }
+
+    def review_code(
+
+        self,
+
+        code
+
+    ):
+
+        return reviewer.review(code)
+
+    def execute(
+
+        self,
+
+        file_path
+
+    ):
+
+        return executor.run_python(file_path)
 
 
 software_engineer_agent = SoftwareEngineerAgent()
