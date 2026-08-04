@@ -7,7 +7,7 @@ from app.database.init_db import init_db
 from app.api.ai import router as ai_router
 from app.api.tools import router as tools_router
 from app.api.automl import router as automl_router
-
+from app.api.memory import router as memory_router
 from app.projects.router import (
     router as projects_router
 )
@@ -48,7 +48,7 @@ app.include_router(
 app.include_router(
     project_file_router
 )
-
+app.include_router(memory_router)
 
 @app.get("/")
 def root():

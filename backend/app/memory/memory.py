@@ -1,41 +1,21 @@
-from datetime import datetime
-
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy import DateTime
-
-from app.models.base import Base
+from app.memory.history import chat_history
 
 
-class Memory(Base):
+class MemoryManager:
 
-    __tablename__ = "memories"
+    def remember(self, user, assistant):
 
-    id = Column(
-        Integer,
-        primary_key=True,
-        index=True
-    )
+        chat_history.add("user", user)
 
-    user_id = Column(
-        Integer,
-        nullable=False,
-        index=True
-    )
+        chat_history.add("assistant", assistant)
 
-    memory_type = Column(
-        String,
-        default="conversation"
-    )
+    def history(self):
 
-    content = Column(
-        Text,
-        nullable=False
-    )
+        return chat_history.get()
 
-    created_at = Column(
-        DateTime,
-        default=datetime.utcnow
-    )
+    def clear(self):
+
+        chat_history.clear()
+
+
+memory = MemoryManager()

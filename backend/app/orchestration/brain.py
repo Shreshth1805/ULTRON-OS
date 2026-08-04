@@ -1,7 +1,10 @@
 from app.orchestration.router import detect_intent
 from app.orchestration.llm_router import general_chat
 
-from app.tools.registry import get_agent
+from app.orchestration.planner import planner
+from app.orchestration.executor import executor
+
+from app.memory.memory import memory
 
 from app.memory.service import (
     save_message,
@@ -13,87 +16,73 @@ def process_request(
     message: str,
     session_id: str = "default"
 ):
+    """
+    ULTRON Brain
 
-    # Get previous conversation first
+    Flow:
+    1. Load conversation history
+    2. Detect intent (optional)
+    3. Create execution plan
+    4. Execute first task
+    5. Save conversation
+    6. Return response
+    """
+
+    # =====================================================
+    # LOAD CHAT HISTORY
+    # =====================================================
+
     history = get_history(
         session_id=session_id,
         limit=20
     )
 
-    # Detect request type
-    intent = detect_intent(
-        message
-    )
+    live_history = memory.history()
 
     # =====================================================
-    # SOFTWARE ENGINEER
+    # DETECT INTENT
     # =====================================================
 
-    if intent == "software_engineer":
-
-        agent = get_agent(
-            "software_engineer_agent"
-        )
-
-        if agent is None:
-
-            result = {
-                "success": False,
-                "error": "Software Engineer agent unavailable."
-            }
-
-        else:
-
-            result = agent.run(
-                message
-            )
+    intent = detect_intent(message)
 
     # =====================================================
-    # AUTOML
+    # CREATE EXECUTION PLAN
     # =====================================================
 
-    elif intent == "automl":
+    tasks = planner.create_plan(message)
 
-        agent = get_agent(
-            "automl_agent"
-        )
+    if not tasks:
 
-        if agent is None:
-
-            result = {
-                "success": False,
-                "error": "AutoML agent unavailable."
-            }
-
-        else:
-
-            result = agent.run(
-                message
-            )
-
-    # =====================================================
-    # GENERAL GROQ
-    # =====================================================
+        result = {
+            "success": False,
+            "response": "Unable to create execution plan."
+        }
 
     else:
 
-        result = general_chat(
-            message=message,
-            history=history
-        )
+        task = tasks[0]
+
+        # -----------------------------------------
+        # GENERAL CHAT
+        # -----------------------------------------
+
+        if task.agent == "general_chat":
+
+            result = general_chat(
+                message=message,
+                history=history
+            )
+
+        # -----------------------------------------
+        # EXECUTE AGENT
+        # -----------------------------------------
+
+        else:
+
+            result = executor.execute(task)
 
     # =====================================================
-    # SAVE USER MESSAGE
-    # =====================================================
-
-    save_message(
-        session_id=session_id,
-        role="user",
-        message=message
-    )
-
-    # =====================================================
-    # SAVE ASSISTANT RESPONSE
+    # EXTRACT RESPONSE
     # =====================================================
 
     if isinstance(result, dict):
@@ -107,10 +96,37 @@ def process_request(
 
         response_text = str(result)
 
+    # =====================================================
+    # SAVE USER MESSAGE
+    # =====================================================
+
+    save_message(
+        session_id=session_id,
+        role="user",
+        message=message
+    )
+
+    # =====================================================
+    # SAVE ASSISTANT MESSAGE
+    # =====================================================
+
     save_message(
         session_id=session_id,
         role="assistant",
         message=response_text
     )
+
+    # =====================================================
+    # STORE LIVE MEMORY
+    # =====================================================
+
+    memory.remember(
+        message,
+        response_text
+    )
+
+    # =====================================================
+    # RETURN RESPONSE
+    # =====================================================
 
     return result
