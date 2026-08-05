@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any
 
 
 @dataclass
@@ -7,10 +7,10 @@ class Task:
 
     name: str
 
-    agent: str
+    agent: str = ""
 
-    description: str
+    description: str = ""
 
-    status: str = "pending"
+    success: bool = False
 
-    result: Optional[dict] = None
+    output: Any = None

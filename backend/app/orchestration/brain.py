@@ -1,11 +1,10 @@
 from app.orchestration.router import detect_intent
 from app.orchestration.llm_router import general_chat
+from app.orchestration.orchestrator import orchestrator
 
-from app.orchestration.planner import planner
-from app.orchestration.executor import executor
+from app.tools.registry import get_agent
 
 from app.memory.memory import memory
-
 from app.memory.service import (
     save_message,
     get_history
@@ -19,17 +18,23 @@ def process_request(
     """
     ULTRON Brain
 
-    Flow:
-    1. Load conversation history
-    2. Detect intent (optional)
-    3. Create execution plan
-    4. Execute first task
-    5. Save conversation
-    6. Return response
+    Flow
+
+    User
+      ↓
+    Detect Intent
+      ↓
+    Route Request
+      ↓
+    Orchestrator / AutoML / Chat
+      ↓
+    Save Memory
+      ↓
+    Return Response
     """
 
     # =====================================================
-    # LOAD CHAT HISTORY
+    # LOAD HISTORY
     # =====================================================
 
     history = get_history(
@@ -37,59 +42,84 @@ def process_request(
         limit=20
     )
 
-    live_history = memory.history()
-
     # =====================================================
     # DETECT INTENT
     # =====================================================
 
-    intent = detect_intent(message)
+    intent = detect_intent(
+        message
+    )
 
     # =====================================================
-    # CREATE EXECUTION PLAN
+    # SOFTWARE / PROJECT REQUESTS
     # =====================================================
 
-    tasks = planner.create_plan(message)
+    if intent in [
 
-    if not tasks:
+        "software_engineer",
 
-        result = {
-            "success": False,
-            "response": "Unable to create execution plan."
-        }
+        "project",
 
-    else:
+        "coding"
 
-        task = tasks[0]
+    ]:
 
-        # -----------------------------------------
-        # GENERAL CHAT
-        # -----------------------------------------
+        result = orchestrator.execute(
+            message
+        )
 
-        if task.agent == "general_chat":
+    # =====================================================
+    # AUTOML
+    # =====================================================
 
-            result = general_chat(
-                message=message,
-                history=history
+    elif intent == "automl":
+
+        automl = get_agent(
+            "automl_agent"
+        )
+
+        if automl:
+
+            result = automl.run(
+                message
             )
-
-        # -----------------------------------------
-        # EXECUTE AGENT
-        # -----------------------------------------
 
         else:
 
-            result = executor.execute(task)
+            result = {
+
+                "success": False,
+
+                "response": "AutoML Agent not available."
+
+            }
 
     # =====================================================
-    # EXTRACT RESPONSE
+    # GENERAL CHAT
+    # =====================================================
+
+    else:
+
+        result = general_chat(
+
+            message=message,
+
+            history=history
+
+        )
+
+    # =====================================================
+    # RESPONSE TEXT
     # =====================================================
 
     if isinstance(result, dict):
 
         response_text = result.get(
+
             "response",
+
             str(result)
+
         )
 
     else:
@@ -101,9 +131,13 @@ def process_request(
     # =====================================================
 
     save_message(
+
         session_id=session_id,
+
         role="user",
+
         message=message
+
     )
 
     # =====================================================
@@ -111,22 +145,29 @@ def process_request(
     # =====================================================
 
     save_message(
+
         session_id=session_id,
+
         role="assistant",
+
         message=response_text
+
     )
 
     # =====================================================
-    # STORE LIVE MEMORY
+    # LIVE MEMORY
     # =====================================================
 
     memory.remember(
+
         message,
+
         response_text
+
     )
 
     # =====================================================
-    # RETURN RESPONSE
+    # RETURN
     # =====================================================
 
     return result

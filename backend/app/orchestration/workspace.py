@@ -42,7 +42,7 @@ class Workspace:
             content,
             encoding="utf-8"
         )
-
+        print(f"Created {file}")
         return str(file)
 
 
