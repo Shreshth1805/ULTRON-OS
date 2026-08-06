@@ -1,13 +1,18 @@
 TEST_PROMPT = """
-You are a Senior Python QA Engineer.
+You are an expert Python Test Engineer.
 
-Generate pytest unit tests.
+Generate pytest unit tests for the following code.
 
-Rules:
+Requirements:
 
-- Return ONLY Python code.
-- No markdown.
-- No explanation.
-- Cover all important functions.
-- Use pytest.
+- Use pytest
+- Cover edge cases
+- Cover invalid inputs
+- Cover normal inputs
+
+Code:
+
+{code}
+
+Return ONLY Python code.
 """

@@ -14,7 +14,7 @@ class ProjectBuilder:
 
     def make_name(self, prompt: str) -> str:
         """
-        Generate a safe project folder name.
+        Generate a safe project name.
         """
 
         name = re.sub(
@@ -28,12 +28,10 @@ class ProjectBuilder:
     def build(self, prompt: str):
 
         # =====================================================
-        # Planner Agent
+        # Planner
         # =====================================================
 
-        planner = get_agent(
-            "planner_agent"
-        )
+        planner = get_agent("planner_agent")
 
         plan = {}
 
@@ -41,13 +39,12 @@ class ProjectBuilder:
 
             try:
 
-                plan = planner.create_plan(
-                    prompt
-                )
+                plan = planner.create_plan(prompt)
 
             except Exception as e:
 
                 plan = {
+                    "success": False,
                     "error": str(e)
                 }
 
@@ -55,22 +52,31 @@ class ProjectBuilder:
         # Project Name
         # =====================================================
 
-        project_name = plan.get(
-            "project_name"
-        ) or self.make_name(prompt)
+        project_name = self.make_name(prompt)
+
+        if isinstance(plan, dict):
+
+            project_name = plan.get(
+                "project_name",
+                project_name
+            )
 
         project_path = workspace.create_project(
             project_name
         )
 
         # =====================================================
-        # File Structure
+        # Project Structure
         # =====================================================
 
-        files = plan.get(
-            "files",
-            []
-        )
+        files = []
+
+        if isinstance(plan, dict):
+
+            files = plan.get(
+                "files",
+                []
+            )
 
         if not files:
 
@@ -83,23 +89,16 @@ class ProjectBuilder:
             except Exception as e:
 
                 return {
-
                     "success": False,
-
                     "response": "Failed generating project structure.",
-
                     "error": str(e)
-
                 }
 
         if not files:
 
             return {
-
                 "success": False,
-
-                "response": "Project contains no files."
-
+                "response": "No files generated."
             }
 
         # =====================================================
@@ -113,124 +112,297 @@ class ProjectBuilder:
             try:
 
                 code = file_generator.generate(
-
                     filename=filename,
-
                     project_description=prompt
-
                 )
 
                 workspace.write_file(
-
                     project=project_path,
-
                     filename=filename,
-
                     content=code
-
                 )
 
-                generated_files.append(
-                    filename
-                )
+                generated_files.append(filename)
 
             except Exception as e:
 
                 return {
-
                     "success": False,
-
                     "response": f"Failed generating {filename}",
-
                     "error": str(e)
-
                 }
 
         # =====================================================
         # Execute Project
         # =====================================================
 
-        execution_result = execution_loop.execute(
+        try:
 
-            project_path=str(project_path),
+            execution_result = execution_loop.execute(
+                project_path=str(project_path),
+                entry_file="app/main.py"
+            )
 
-            entry_file="app/main.py"
+        except Exception as e:
 
-        )
+            execution_result = {
+                "success": False,
+                "error": str(e)
+            }
 
         # =====================================================
-        # Review Agent
+        # Review
         # =====================================================
 
         review_result = None
 
-        reviewer = get_agent(
-            "reviewer_agent"
-        )
+        reviewer = get_agent("reviewer_agent")
 
         if reviewer:
 
             try:
 
                 review_result = reviewer.review_project(
-
                     str(project_path)
-
                 )
 
             except Exception as e:
 
                 review_result = {
-
                     "success": False,
-
                     "error": str(e)
-
                 }
 
         # =====================================================
-        # Tester Agent
+        # Security Review
+        # =====================================================
+
+        security_result = None
+
+        security = get_agent("security_agent")
+
+        if security:
+
+            try:
+
+                code = ""
+
+                for file in Path(project_path).rglob("*.py"):
+
+                    code += file.read_text(
+                        encoding="utf-8"
+                    )
+
+                    code += "\n\n"
+
+                security_result = security.review(code)
+
+            except Exception as e:
+
+                security_result = {
+                    "success": False,
+                    "error": str(e)
+                }
+
+        # =====================================================
+        # Testing
         # =====================================================
 
         testing_result = None
 
-        tester = get_agent(
-            "tester_agent"
-        )
+        tester = get_agent("tester_agent")
 
         if tester:
 
             try:
 
                 testing_result = tester.test_project(
-
                     str(project_path)
-
                 )
 
             except Exception as e:
 
                 testing_result = {
+                    "success": False,
+                    "error": str(e)
+                }
+
+        # =====================================================
+        # Auto Fix
+        # =====================================================
+
+        fixer_result = None
+
+        fixer = get_agent("fixer_agent")
+
+        if (
+            fixer
+            and isinstance(testing_result, dict)
+            and not testing_result.get("success", True)
+        ):
+
+            try:
+
+                fixer_result = fixer.fix_project(
+                    str(project_path),
+                    testing_result
+                )
+
+            except Exception as e:
+
+                fixer_result = {
+                    "success": False,
+                    "error": str(e)
+                }
+
+        # =====================================================
+        # Reflection
+        # =====================================================
+
+        reflection_result = None
+
+        reflection = get_agent("reflection_agent")
+
+        if reflection:
+
+            try:
+
+                reflection_result = reflection.reflect(
+                    project=project_name,
+                    execution=execution_result,
+                    review=review_result,
+                    security=security_result,
+                    performance=performance_result,
+                    testing=testing_result,
+                    review=review_result
+                )
+
+            except Exception as e:
+
+                reflection_result = {
+                    "success": False,
+                    "error": str(e)
+                }
+        # =====================================================
+        # Security Review
+        # =====================================================
+
+        security_result = None
+
+        security = get_agent(
+            "security_agent"
+        )
+
+        if security:
+
+            try:
+
+                security_result = security.review(
+                    project_code
+                )
+
+            except Exception as e:
+
+                security_result = {
 
                     "success": False,
 
                     "error": str(e)
 
-                }
-
+                } 
         # =====================================================
-        # Project Statistics
+        # Performance Review
+        # =====================================================
+        performance_result = None
+        performance = get_agent(
+            "performance_agent"
+        )
+        if performance:
+
+            try:
+
+                performance_result = performance.analyze(
+                    project_code
+                )
+
+            except Exception as e:
+
+                performance_result = {
+
+                    "success": False,
+
+                    "error": str(e)
+                }                               
+        # =====================================================
+        # Load Project Source Code Once
         # =====================================================
 
         python_files = list(
-
             Path(project_path).rglob("*.py")
+        )
 
+        project_code = ""
+
+        for file in python_files:
+
+            try:
+
+                project_code += file.read_text(
+                    encoding="utf-8"
+                )
+
+                project_code += "\n\n"
+
+            except Exception:
+                pass        
+        # =====================================================
+        # GitHub
+        # =====================================================
+
+        github_result = None
+
+        github = get_agent("github_agent")
+
+        if github:
+
+            try:
+
+                github_result = github.publish(
+                    project_name=project_name,
+                    project_path=str(project_path)
+                )
+
+            except Exception as e:
+
+                github_result = {
+                    "success": False,
+                    "error": str(e)
+                }
+
+        # =====================================================
+        # Statistics
+        # =====================================================
+
+        python_files = list(
+            Path(project_path).rglob("*.py")
         )
 
         total_lines = 0
-
         total_size = 0
+        total_files = 0
+
+        for file in Path(project_path).rglob("*"):
+
+            if file.is_file():
+
+                total_files += 1
+
+                try:
+
+                    total_size += file.stat().st_size
+
+                except Exception:
+                    pass
 
         for file in python_files:
 
@@ -244,15 +416,11 @@ class ProjectBuilder:
                     text.splitlines()
                 )
 
-                total_size += len(
-                    text.encode("utf-8")
-                )
-
             except Exception:
                 pass
 
         # =====================================================
-        # Response
+        # Final Response
         # =====================================================
 
         return {
@@ -269,6 +437,8 @@ class ProjectBuilder:
 
             "file_count": len(generated_files),
 
+            "total_files": total_files,
+
             "python_files": len(python_files),
 
             "lines_of_code": total_lines,
@@ -279,7 +449,15 @@ class ProjectBuilder:
 
             "review": review_result,
 
-            "testing": testing_result
+            "security": security_result,
+
+            "testing": testing_result,
+
+            "fixes": fixer_result,
+
+            "reflection": reflection_result,
+
+            "github": github_result
 
         }
 

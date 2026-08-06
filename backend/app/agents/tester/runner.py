@@ -1,35 +1,38 @@
 import subprocess
-from pathlib import Path
 
 
 class TestRunner:
 
-    def run(
-        self,
-        project_path
-    ):
+    def run(self, project_path: str):
 
-        result = subprocess.run(
+        try:
 
-            ["pytest"],
+            result = subprocess.run(
+                ["pytest"],
+                cwd=project_path,
+                capture_output=True,
+                text=True
+            )
 
-            cwd=project_path,
+            return {
 
-            capture_output=True,
+                "success": result.returncode == 0,
 
-            text=True
+                "stdout": result.stdout,
 
-        )
+                "stderr": result.stderr
 
-        return {
+            }
 
-            "success": result.returncode == 0,
+        except Exception as e:
 
-            "stdout": result.stdout,
+            return {
 
-            "stderr": result.stderr
+                "success": False,
 
-        }
+                "error": str(e)
+
+            }
 
 
 test_runner = TestRunner()

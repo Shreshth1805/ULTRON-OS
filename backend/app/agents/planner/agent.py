@@ -1,31 +1,21 @@
-from app.core.llm import llm
-
-from app.agents.planner.prompts import PLANNER_PROMPT
-from app.agents.planner.parser import planner_parser
+from app.agents.planner.planner import planner
 
 
 class PlannerAgent:
 
-    def create_plan(
-        self,
-        prompt: str
-    ):
+    def run(self, request):
 
-        message = f"""
-{PLANNER_PROMPT}
-
-User Request:
-
-{prompt}
-"""
-
-        response = llm.invoke(
-            message
+        plan = planner.create_plan(
+            request
         )
 
-        return planner_parser.parse(
-            response.content
-        )
+        return {
+
+            "success": True,
+
+            "plan": plan.model_dump()
+
+        }
 
 
 planner_agent = PlannerAgent()

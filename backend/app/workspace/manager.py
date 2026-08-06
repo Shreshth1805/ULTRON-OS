@@ -1,94 +1,63 @@
-from pathlib import Path
+from app.workspace.scanner import workspace_scanner
+from app.workspace.tree import workspace_tree
+from app.workspace.search import workspace_search
+from app.workspace.editor import workspace_editor
+from app.workspace.summary import workspace_summary
 
 
-# =========================================================
-# WORKSPACE ROOT
-# =========================================================
+class WorkspaceManager:
 
-WORKSPACE_ROOT = Path("workspace")
+    def scan(self, project):
 
-WORKSPACE_ROOT.mkdir(
-    exist_ok=True
-)
+        return workspace_scanner.scan(project)
 
+    def tree(self, project):
 
-# =========================================================
-# CREATE PROJECT
-# =========================================================
+        return workspace_tree.build(project)
 
-def create_project_directory(
-    project_name: str
-):
+    def search(
 
-    safe_name = project_name.strip()
+        self,
 
-    project_path = (
-        WORKSPACE_ROOT /
-        safe_name
-    )
+        project,
 
-    project_path.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+        keyword
 
-    return project_path
+    ):
 
+        return workspace_search.search(
 
-# =========================================================
-# DELETE PROJECT DIRECTORY
-# =========================================================
+            project,
 
-def delete_project_directory(
-    project_name: str
-):
+            keyword
 
-    project_path = (
-        WORKSPACE_ROOT /
-        project_name
-    )
+        )
 
-    if not project_path.exists():
+    def replace(
 
-        return False
+        self,
 
-    import shutil
+        project,
 
-    shutil.rmtree(
-        project_path
-    )
+        filename,
 
-    return True
+        content
+
+    ):
+
+        return workspace_editor.replace(
+
+            project,
+
+            filename,
+
+            content
+
+        )
+
+    def summary(self, project):
+
+        return workspace_summary.summarize(project)
 
 
-# =========================================================
-# PROJECT EXISTS
-# =========================================================
-
-def project_exists(
-    project_name: str
-):
-
-    project_path = (
-        WORKSPACE_ROOT /
-        project_name
-    )
-
-    return project_path.exists()
-
-
-# =========================================================
-# LIST PROJECTS
-# =========================================================
-
-def list_project_directories():
-
-    if not WORKSPACE_ROOT.exists():
-
-        return []
-
-    return [
-        item.name
-        for item in WORKSPACE_ROOT.iterdir()
-        if item.is_dir()
-    ]
+workspace_manager = WorkspaceManager()

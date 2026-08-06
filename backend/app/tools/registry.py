@@ -17,42 +17,45 @@ _TOOLS.update(DATASET_TOOLS)
 
 
 def register_tool(name, tool):
+    """
+    Register a new tool.
+    """
 
     _TOOLS[name] = tool
-
     return tool
 
 
 def get_tool(name):
+    """
+    Get tool by name.
+    """
 
     return _TOOLS.get(name)
 
 
 def list_tools():
+    """
+    Return all registered tools.
+    """
 
-    return list(_TOOLS.keys())
+    return sorted(_TOOLS.keys())
 
 
 def get_code_tools():
+    """
+    Return only coding tools.
+    """
 
     allowed = {
-
         "write_file",
-
         "read_file",
-
         "validate_python_code"
-
     }
 
     return {
-
         name: tool
-
         for name, tool in _TOOLS.items()
-
         if name in allowed
-
     }
 
 
@@ -64,115 +67,185 @@ _AGENTS = {}
 
 
 def register_agent(name, agent):
+    """
+    Register an agent.
+    """
 
     _AGENTS[name] = agent
-
     return agent
 
 
 def get_agent(name):
+    """
+    Lazy-load an agent when requested.
+    """
 
     if name in _AGENTS:
-
         return _AGENTS[name]
 
-    # =====================================================
-    # SOFTWARE ENGINEER
-    # =====================================================
+    try:
 
-    if name == "software_engineer_agent":
+        # =====================================================
+        # Software Engineer
+        # =====================================================
 
-        from app.agents.software_engineer.engineer import (
-            software_engineer_agent
-        )
+        if name == "software_engineer_agent":
 
-        register_agent(
-            name,
-            software_engineer_agent
-        )
+            from app.agents.software_engineer.engineer import (
+                software_engineer_agent
+            )
 
-    # =====================================================
-    # AUTOML
-    # =====================================================
+            register_agent(
+                name,
+                software_engineer_agent
+            )
 
-    elif name == "automl_agent":
+        # =====================================================
+        # AutoML
+        # =====================================================
 
-        from app.agents.automl_agent.agent import (
-            automl_agent
-        )
+        elif name == "automl_agent":
 
-        register_agent(
-            name,
-            automl_agent
-        )
+            from app.agents.automl_agent.agent import (
+                automl_agent
+            )
 
-    # =====================================================
-    # REVIEWER
-    # =====================================================
+            register_agent(
+                name,
+                automl_agent
+            )
 
-    elif name == "reviewer_agent":
+        # =====================================================
+        # Reviewer
+        # =====================================================
 
-        from app.agents.reviewer.reviewer import (
-            reviewer_agent
-        )
+        elif name == "reviewer_agent":
 
-        register_agent(
-            name,
-            reviewer_agent
-        )
+            from app.agents.reviewer.agent import (
+                reviewer_agent
+            )
 
-    # =====================================================
-    # TESTER
-    # =====================================================
+            register_agent(
+                name,
+                reviewer_agent
+            )
 
-    elif name == "tester_agent":
+        # =====================================================
+        # Tester
+        # =====================================================
 
-        from app.agents.tester.agent import (
-            tester_agent
-        )
+        elif name == "tester_agent":
 
-        register_agent(
-            name,
-            tester_agent
-        )
+            from app.agents.tester.agent import (
+                tester_agent
+            )
 
-    # =====================================================
-    # PLANNER
-    # =====================================================
+            register_agent(
+                name,
+                tester_agent
+            )
 
-    elif name == "planner_agent":
+        # =====================================================
+        # Planner
+        # =====================================================
 
-        from app.agents.planner.agent import (
-            planner_agent
-        )
+        elif name == "planner_agent":
 
-        register_agent(
-            name,
-            planner_agent
-        )
+            from app.agents.planner.agent import (
+                planner_agent
+            )
 
-    # =====================================================
-    # PROJECT BUILDER
-    # =====================================================
+            register_agent(
+                name,
+                planner_agent
+            )
 
-    elif name == "project_builder":
+        # =====================================================
+        # Project Builder
+        # =====================================================
 
-        from app.orchestration.project_builder import (
-            project_builder
-        )
+        elif name == "project_builder":
 
-        register_agent(
-            name,
-            project_builder
-        )
+            from app.orchestration.project_builder import (
+                project_builder
+            )
 
-    # =====================================================
-    # DEVOPS (Future)
-    # =====================================================
+            register_agent(
+                name,
+                project_builder
+            )
+        elif name == "fixer_agent":
 
-    elif name == "devops_agent":
+            from app.agents.fixer.agent import (
 
-        try:
+                fixer_agent
+
+            )
+
+            register_agent(
+
+                name,
+
+                fixer_agent
+
+            )
+        # =====================================================
+# PERFORMANCE
+# =====================================================
+
+        elif name == "performance_agent":
+
+            from app.agents.performance.agent import (
+                performance_agent
+            )
+
+            register_agent(
+                name,
+                performance_agent
+            )    
+        elif name == "security_agent":
+
+            from app.agents.security.agent import security_agent
+
+            register_agent(
+                name,
+                security_agent
+            )   
+        elif name == "docker_agent":
+
+            from app.agents.docker.agent import (
+                docker_agent
+            )
+
+            register_agent(
+                name,
+                docker_agent
+            )
+        elif name == "github_agent":
+
+            from app.agents.github.agent import (
+                github_agent
+            )
+
+            register_agent(
+                name,
+                github_agent
+            )    
+        elif name == "reflection_agent":
+
+            from app.agents.reflection.agent import (
+                reflection_agent
+            )
+
+            register_agent(
+                name,
+                reflection_agent
+            )    
+        # =====================================================
+        # DevOps
+        # =====================================================
+
+        elif name == "devops_agent":
 
             from app.agents.devops.agent import (
                 devops_agent
@@ -183,13 +256,17 @@ def get_agent(name):
                 devops_agent
             )
 
-        except ImportError:
+    except ImportError as e:
 
-            return None
+        print(f"[Registry] Failed to load '{name}': {e}")
+        return None
 
     return _AGENTS.get(name)
 
 
 def list_agents():
+    """
+    Return loaded agents.
+    """
 
-    return list(_AGENTS.keys())
+    return sorted(_AGENTS.keys())

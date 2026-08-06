@@ -1,28 +1,16 @@
 import json
 
-
-class PlannerParser:
-
-    def parse(self, text: str):
-
-        try:
-            return json.loads(text)
-
-        except Exception:
-
-            return {
-
-                "project_name": "",
-
-                "description": "",
-
-                "tech_stack": [],
-
-                "files": [],
-
-                "tasks": []
-
-            }
+from app.agents.planner.models import Plan
 
 
-planner_parser = PlannerParser()
+def parse_plan(text):
+
+    start = text.find("{")
+
+    end = text.rfind("}") + 1
+
+    text = text[start:end]
+
+    data = json.loads(text)
+
+    return Plan(**data)

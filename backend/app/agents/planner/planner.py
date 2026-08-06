@@ -1,94 +1,23 @@
 from app.core.llm import llm
 
+from app.agents.planner.prompts import PLANNER_PROMPT
 
-SYSTEM_PROMPT = """
-You are the central planner of an AI operating system
-called ULTRON.
-
-Your job is to analyze the user's request and select
-the most appropriate specialized agent.
-
-Available agents:
-
-software_engineer
-automl
-research
-general
-
-Use:
-
-software_engineer
-for:
-- programming
-- coding
-- debugging
-- software development
-- APIs
-- backend development
-- frontend development
-- architecture
-- Git
-- databases
-
-automl
-for:
-- datasets
-- machine learning
-- training models
-- preprocessing
-- feature engineering
-- model selection
-- model evaluation
-- predictions
-
-research
-for:
-- research
-- explanations
-- information gathering
-- technical investigation
-
-general
-for:
-- normal conversation
-- greetings
-- general questions
-
-Return ONLY ONE of these values:
-
-software_engineer
-automl
-research
-general
-"""
+from app.agents.planner.parser import parse_plan
 
 
-def planner_node(user_message: str) -> str:
+class Planner:
 
-    response = llm.invoke(
-        [
-            (
-                "system",
-                SYSTEM_PROMPT
-            ),
-            (
-                "human",
-                user_message
-            )
-        ]
-    )
+    def create_plan(self, request):
 
-    result = response.content.strip().lower()
+        prompt = PLANNER_PROMPT.format(
+            request=request
+        )
 
-    valid_agents = {
-        "software_engineer",
-        "automl",
-        "research",
-        "general"
-    }
+        response = llm.invoke(prompt)
 
-    if result not in valid_agents:
+        return parse_plan(
+            response.content
+        )
 
-        return "general"
 
-    return result
+planner = Planner()

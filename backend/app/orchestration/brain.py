@@ -1,6 +1,8 @@
 from app.orchestration.router import detect_intent
 from app.orchestration.llm_router import general_chat
-from app.orchestration.orchestrator import orchestrator
+
+from app.agents.planner.planner import planner
+from app.execution.executor import executor
 
 from app.tools.registry import get_agent
 
@@ -22,11 +24,13 @@ def process_request(
 
     User
       ↓
+    Load History
+      ↓
     Detect Intent
       ↓
-    Route Request
+    Planner
       ↓
-    Orchestrator / AutoML / Chat
+    Execution Engine
       ↓
     Save Memory
       ↓
@@ -43,7 +47,7 @@ def process_request(
     )
 
     # =====================================================
-    # DETECT INTENT
+    # DETECT USER INTENT
     # =====================================================
 
     intent = detect_intent(
@@ -51,7 +55,7 @@ def process_request(
     )
 
     # =====================================================
-    # SOFTWARE / PROJECT REQUESTS
+    # SOFTWARE / PROJECT / CODING
     # =====================================================
 
     if intent in [
@@ -64,9 +68,25 @@ def process_request(
 
     ]:
 
-        result = orchestrator.execute(
-            message
-        )
+        try:
+
+            plan = planner.create_plan(
+                message
+            )
+
+            result = executor.execute(
+                plan
+            )
+
+        except Exception as e:
+
+            result = {
+
+                "success": False,
+
+                "response": str(e)
+
+            }
 
     # =====================================================
     # AUTOML
@@ -80,9 +100,21 @@ def process_request(
 
         if automl:
 
-            result = automl.run(
-                message
-            )
+            try:
+
+                result = automl.run(
+                    message
+                )
+
+            except Exception as e:
+
+                result = {
+
+                    "success": False,
+
+                    "response": str(e)
+
+                }
 
         else:
 
@@ -90,7 +122,7 @@ def process_request(
 
                 "success": False,
 
-                "response": "AutoML Agent not available."
+                "response": "AutoML agent not registered."
 
             }
 
@@ -100,13 +132,25 @@ def process_request(
 
     else:
 
-        result = general_chat(
+        try:
 
-            message=message,
+            result = general_chat(
 
-            history=history
+                message=message,
 
-        )
+                history=history
+
+            )
+
+        except Exception as e:
+
+            result = {
+
+                "success": False,
+
+                "response": str(e)
+
+            }
 
     # =====================================================
     # RESPONSE TEXT
@@ -155,7 +199,7 @@ def process_request(
     )
 
     # =====================================================
-    # LIVE MEMORY
+    # STORE IN LIVE MEMORY
     # =====================================================
 
     memory.remember(

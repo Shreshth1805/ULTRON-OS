@@ -1,53 +1,16 @@
-from pathlib import Path
-
-from app.agents.tester.generator import (
-    test_generator
-)
-
-from app.agents.tester.runner import (
-    test_runner
-)
+from app.agents.tester.generator import test_generator
+from app.agents.tester.runner import test_runner
 
 
 class TesterAgent:
 
-    def test_project(
-        self,
-        project_path
-    ):
+    def test_project(self, project_path: str):
 
-        project = Path(project_path)
+        tests = test_generator.generate_tests(
+            project_path
+        )
 
-        generated = []
-
-        for file in project.rglob("*.py"):
-
-            if file.name.startswith("test_"):
-                continue
-
-            code = file.read_text(
-                encoding="utf-8"
-            )
-
-            tests = test_generator.generate(
-                file.name,
-                code
-            )
-
-            test_file = file.parent / (
-                "test_" + file.name
-            )
-
-            test_file.write_text(
-                tests,
-                encoding="utf-8"
-            )
-
-            generated.append(
-                str(test_file)
-            )
-
-        result = test_runner.run(
+        results = test_runner.run(
             project_path
         )
 
@@ -55,9 +18,9 @@ class TesterAgent:
 
             "success": True,
 
-            "generated_tests": generated,
+            "generated_tests": tests,
 
-            "pytest": result
+            "results": results
 
         }
 
