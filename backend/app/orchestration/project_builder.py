@@ -8,7 +8,7 @@ from app.orchestration.workspace import workspace
 from app.execution.loop import execution_loop
 
 from app.tools.registry import get_agent
-
+from app.bus import Event, dispatcher
 
 class ProjectBuilder:
 
@@ -149,6 +149,27 @@ class ProjectBuilder:
                 "success": False,
                 "error": str(e)
             }
+        event = Event(
+
+            type="PROJECT_CREATED",
+
+            source="project_builder",
+
+            payload={
+
+                "project_name": project_name,
+
+                "project_path": str(project_path),
+
+                "code": project_code
+
+            }
+
+        )
+
+        event_results = dispatcher.emit(
+            event
+        )            
 
         # =====================================================
         # Review
@@ -283,6 +304,37 @@ class ProjectBuilder:
                     "success": False,
                     "error": str(e)
                 }
+            learner = get_agent(
+                "learner_agent"
+            )
+
+            learning_result = None
+
+            if learner:
+
+                try:
+
+                    learning_result = learner.learn(
+
+                        project=project_name,
+
+                        review=review_result,
+
+                        testing=testing_result,
+
+                        reflection=reflection_result
+
+                    )
+
+                except Exception as e:
+
+                    learning_result = {
+
+                        "success": False,
+
+                        "error": str(e)
+
+                    }                
         # =====================================================
         # Security Review
         # =====================================================
@@ -354,7 +406,37 @@ class ProjectBuilder:
                 project_code += "\n\n"
 
             except Exception:
-                pass        
+                pass  
+
+        version_result = None
+
+        version = get_agent(
+            "version_agent"
+        )
+
+        if version:
+
+            try:
+
+                version_result = version.save(
+
+                    project=project_name,
+
+                    files=generated_files,
+
+                    message="Initial Generated Project"
+
+                )
+
+            except Exception as e:
+
+                version_result = {
+
+                    "success": False,
+
+                    "error": str(e)
+
+                }                 
         # =====================================================
         # GitHub
         # =====================================================
@@ -457,7 +539,13 @@ class ProjectBuilder:
 
             "reflection": reflection_result,
 
-            "github": github_result
+            "github": github_result,
+
+            "learning": learning_result,
+
+            "version": version_result,
+
+            "events": event_results,
 
         }
 

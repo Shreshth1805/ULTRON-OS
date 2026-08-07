@@ -189,9 +189,39 @@ def get_agent(name):
                 fixer_agent
 
             )
+        elif name == "version_agent":
+
+            from app.agents.version.agent import (
+                version_agent
+            )
+
+            register_agent(
+                name,
+                version_agent
+            )            
+        elif name == "skill_agent":
+
+            from app.agents.skill.agent import (
+                skill_agent
+            )
+
+            register_agent(
+                name,
+                skill_agent
+            )            
+        elif name == "learner_agent":
+
+            from app.agents.learner.agent import (
+                learner_agent
+            )
+
+            register_agent(
+                name,
+                learner_agent
+            )            
         # =====================================================
-# PERFORMANCE
-# =====================================================
+        # PERFORMANCE
+        # =====================================================
 
         elif name == "performance_agent":
 

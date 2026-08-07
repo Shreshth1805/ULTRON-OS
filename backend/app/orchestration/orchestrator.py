@@ -1,14 +1,7 @@
-from app.tools.registry import get_agent
-
-from app.execution.task_executor import (
-    task_executor
+from app.orchestration.workflow_engine import (
+    workflow_engine,
+    WorkflowTask
 )
-
-from app.orchestration.report import (
-    ExecutionReport
-)
-
-from app.orchestration.task import Task
 
 
 class Orchestrator:
@@ -18,99 +11,188 @@ class Orchestrator:
         prompt: str
     ):
 
-        report = ExecutionReport()
+        tasks = [
 
-        # =====================================================
-        # STEP 1 : CREATE PLAN
-        # =====================================================
+            # ===========================================
+            # Planner
+            # ===========================================
 
-        planner = get_agent(
-            "planner_agent"
-        )
+            WorkflowTask(
 
-        plan = {}
+                name="planner",
 
-        if planner:
+                agent="planner_agent",
 
-            try:
+                action="create_plan",
 
-                plan = planner.create_plan(
-                    prompt
-                )
+                kwargs={
 
-                report.add(
+                    "prompt": prompt
 
-                    name="Planning",
+                }
 
-                    success=True,
+            ),
 
-                    output=plan
+            # ===========================================
+            # Project Builder
+            # ===========================================
 
-                )
+            WorkflowTask(
 
-            except Exception as e:
+                name="builder",
 
-                report.add(
+                agent="project_builder",
 
-                    name="Planning",
+                action="build",
 
-                    success=False,
+                kwargs={
 
-                    output=str(e)
+                    "prompt": prompt
 
-                )
+                },
 
-        # =====================================================
-        # STEP 2 : BUILD PROJECT
-        # =====================================================
+                depends_on=["planner"]
 
-        build_task = Task(
+            ),
 
-            name="Project Builder",
+            # ===========================================
+            # Reviewer
+            # ===========================================
 
-            success=False,
+            WorkflowTask(
 
-            output=None
+                name="reviewer",
 
-        )
+                agent="reviewer_agent",
 
-        build_task.agent = "project_builder"
+                action="review_project",
 
-        build_task.description = prompt
+                kwargs={
 
-        try:
+                    "project_path": ""
 
-            result = task_executor.execute(
-                build_task
+                },
+
+                depends_on=["builder"]
+
+            ),
+
+            # ===========================================
+            # Security
+            # ===========================================
+
+            WorkflowTask(
+
+                name="security",
+
+                agent="security_agent",
+
+                action="review_project",
+
+                kwargs={
+
+                    "project_path": ""
+
+                },
+
+                depends_on=["builder"]
+
+            ),
+
+            # ===========================================
+            # Tester
+            # ===========================================
+
+            WorkflowTask(
+
+                name="tester",
+
+                agent="tester_agent",
+
+                action="test_project",
+
+                kwargs={
+
+                    "project_path": ""
+
+                },
+
+                depends_on=[
+
+                    "reviewer",
+                    "security"
+
+                ]
+
+            ),
+
+            # ===========================================
+            # Auto Fix
+            # ===========================================
+
+            WorkflowTask(
+
+                name="fixer",
+
+                agent="fixer_agent",
+
+                action="fix_project",
+
+                kwargs={
+
+                    "project_path": ""
+
+                },
+
+                depends_on=["tester"]
+
+            ),
+
+            # ===========================================
+            # Reflection
+            # ===========================================
+
+            WorkflowTask(
+
+                name="reflection",
+
+                agent="reflection_agent",
+
+                action="reflect",
+
+                kwargs={},
+
+                depends_on=["fixer"]
+
+            ),
+
+            # ===========================================
+            # GitHub Publish
+            # ===========================================
+
+            WorkflowTask(
+
+                name="github",
+
+                agent="github_agent",
+
+                action="publish",
+
+                kwargs={
+
+                    "project_name": "",
+
+                    "project_path": ""
+
+                },
+
+                depends_on=["reflection"]
+
             )
 
-            report.add(
+        ]
 
-                name="Project Builder",
-
-                success=result.success,
-
-                output=result.output
-
-            )
-
-        except Exception as e:
-
-            report.add(
-
-                name="Project Builder",
-
-                success=False,
-
-                output=str(e)
-
-            )
-
-        # =====================================================
-        # RETURN REPORT
-        # =====================================================
-
-        return report.summary()
+        return workflow_engine.execute(tasks)
 
 
 orchestrator = Orchestrator()

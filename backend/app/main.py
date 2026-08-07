@@ -14,7 +14,7 @@ from app.api.tools import router as tools_router
 from app.api.automl import router as automl_router
 from app.api.memory import router as memory_router
 from app.api.knowledge import router as knowledge_router
-
+import app.monitoring.workflow_monitor
 from app.projects.router import (
     router as projects_router
 )
@@ -22,7 +22,14 @@ from app.projects.router import (
 from app.projects.file_router import (
     router as project_file_router
 )
+from app.api.llm import (
+    router as llm_router
+)
+from app.api.semantic_memory import (
 
+    router as semantic_memory_router
+
+)
 
 # ==========================================================
 # APPLICATION LIFESPAN
@@ -76,6 +83,10 @@ app.include_router(projects_router)
 app.include_router(project_file_router)
 
 app.include_router(knowledge_router)
+
+app.include_router(llm_router)
+
+app.include_router(semantic_memory_router)
 
 # ==========================================================
 # ROOT
