@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Todo List</h1>
+  <ul id="todo-list">
+    {% for todo in todos %}
+      <li>
+        <input type="checkbox" id="todo-{{ todo.id }}" {{ "checked" if todo.completed else "" }}>
+        <span>{{ todo.title }}</span>
+        <button class="delete-btn" data-id="{{ todo.id }}">Delete</button>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form id="create-todo-form">
+    <input type="text" id="title" placeholder="Enter todo title">
+    <button type="submit">Create Todo</button>
+  </form>
+
+  <script>
+    const todoList = document.getElementById('todo-list');
+    const createTodoForm = document.getElementById('create-todo-form');
+
+    createTodoForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value;
+      const response = await fetch('/todos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title })
+      });
+      const todo = await response.json();
+      const todoHtml = `
+        <li>
+          <input type="checkbox" id="todo-${todo.id}" {{ "checked" if todo.completed else "" }}>
+          <span>${todo.title}</span>
+          <button class="delete-btn" data-id="${todo.id}">Delete</button>
+        </li>
+      `;
+      todoList.insertAdjacentHTML('beforeend', todoHtml);
+      document.getElementById('title').value = '';
+    });
+
+    todoList.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('delete-btn')) {
+        const todoId = e.target.dataset.id;
+        const response = await fetch(`/todos/${todoId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          e.target.parentNode.remove();
+        }
+      }
+    });
+
+    todoList.addEventListener('change', async (e) => {
+      if (e.target.type === 'checkbox') {
+        const todoId = e.target.id.split('-')[1];
+        const response = await fetch(`/todos/${todoId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ completed: e.target.checked })
+        });
+        if (response.ok) {
+          const todo = await response.json();
+          e.target.checked = todo.completed;
+        }
+      }
+    });
+  </script>
+{% endblock %}

@@ -1,21 +1,58 @@
-from app.agents.planner.planner import planner
+# =========================================================
+# ULTRON PLANNER AGENT
+# =========================================================
+
+from app.agents.software_engineer.planner import planner
 
 
 class PlannerAgent:
+    """
+    High-level planning agent.
 
-    def run(self, request):
+    Converts a user's project request into a
+    structured development plan.
+    """
 
-        plan = planner.create_plan(
-            request
-        )
+    # =====================================================
+    # CREATE PLAN
+    # =====================================================
 
-        return {
+    def create_plan(
+        self,
+        prompt: str
+    ):
+        """
+        Create a software development plan.
+        """
 
-            "success": True,
+        if not prompt or not prompt.strip():
 
-            "plan": plan.model_dump()
+            return {
+                "success": False,
+                "error": "Project prompt cannot be empty."
+            }
 
-        }
+        try:
 
+            plan = planner.create_plan(
+                prompt
+            )
+
+            return {
+                "success": True,
+                "plan": plan
+            }
+
+        except Exception as error:
+
+            return {
+                "success": False,
+                "error": str(error)
+            }
+
+
+# =========================================================
+# SINGLETON
+# =========================================================
 
 planner_agent = PlannerAgent()

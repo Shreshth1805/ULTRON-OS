@@ -14,14 +14,6 @@ from app.orchestration.context_manager import (
     context_manager
 )
 
-from app.orchestration.dependency_resolver import (
-    dependency_resolver
-)
-import traceback
-
-from app.orchestration.scheduler import (
-    task_scheduler
-)
 
 @dataclass
 class WorkflowTask:
@@ -32,9 +24,13 @@ class WorkflowTask:
 
     action: str
 
-    kwargs: dict = field(default_factory=dict)
+    kwargs: dict = field(
+        default_factory=dict
+    )
 
-    depends_on: List[str] = field(default_factory=list)
+    depends_on: List[str] = field(
+        default_factory=list
+    )
 
     priority: int = 100
 
@@ -44,16 +40,100 @@ class WorkflowTask:
 
     timeout: int = 300
 
+
 class WorkflowEngine:
+
+    # =========================================================
+    # RESOLVE VALUE
+    # =========================================================
+
+    def _resolve_value(
+        self,
+        value,
+        results
+    ):
+
+        if not isinstance(
+            value,
+            str
+        ):
+
+            return value
+
+        # -----------------------------------------------------
+        # $planner
+        # -----------------------------------------------------
+
+        if value.startswith("$"):
+
+            expression = value[1:]
+
+            parts = expression.split(
+                "."
+            )
+
+            task_name = parts[0]
+
+            if task_name not in results:
+
+                return value
+
+            current = results[
+                task_name
+            ]
+
+            # -------------------------------------------------
+            # Navigate nested result
+            # -------------------------------------------------
+
+            for part in parts[1:]:
+
+                if isinstance(
+                    current,
+                    dict
+                ):
+
+                    current = current.get(
+                        part
+                    )
+
+                else:
+
+                    return None
+
+            return current
+
+        return value
+
+    # =========================================================
+    # RESOLVE KWARGS
+    # =========================================================
+
+    def _resolve_kwargs(
+        self,
+        kwargs,
+        results
+    ):
+
+        resolved = {}
+
+        for key, value in kwargs.items():
+
+            resolved[key] = self._resolve_value(
+                value,
+                results
+            )
+
+        return resolved
+
+    # =========================================================
+    # EXECUTE
+    # =========================================================
 
     def execute(
         self,
         tasks: List[WorkflowTask]
     ):
-
-        # =====================================================
-        # Initialize
-        # =====================================================
 
         context_manager.reset()
 
@@ -65,47 +145,56 @@ class WorkflowEngine:
 
         workflow_start = time.time()
 
+        task_map = {
+            task.name: task
+            for task in tasks
+        }
+
         # =====================================================
-        # Execute Workflow
+        # MAIN LOOP
         # =====================================================
 
         while len(completed) < len(tasks):
 
             progress = False
-            task = task_scheduler.next()
 
-            if task is None:
-                break
+            # -------------------------------------------------
+            # Find executable tasks
+            # -------------------------------------------------
+
             for task in tasks:
 
-                task_scheduler.add(
+                if task.name in completed:
 
-                    task,
-
-                    priority=task.priority
-
-                )
-
-            while not task_scheduler.empty():
-                # --------------------------------------------
-                # Wait for dependencies
-                # --------------------------------------------
-
-                if any(
-                    dep not in completed
-                    for dep in task.depends_on
-                ):
                     continue
 
-                # --------------------------------------------
-                # Get Agent
-                # --------------------------------------------
+                # -------------------------------------------------
+                # Dependencies
+                # -------------------------------------------------
 
-                agent = get_agent(task.agent)
+                dependencies_ready = all(
+                    dep in completed
+                    for dep in task.depends_on
+                )
+
+                if not dependencies_ready:
+
+                    continue
+
+                # -------------------------------------------------
+                # Agent
+                # -------------------------------------------------
+
+                agent = get_agent(
+                    task.agent
+                )
 
                 if agent is None:
 
-                    error = f"Agent '{task.agent}' not found."
+                    error = (
+                        f"Agent '{task.agent}' "
+                        f"not found."
+                    )
 
                     result = {
 
@@ -119,70 +208,39 @@ class WorkflowEngine:
 
                         "error": error,
 
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp":
+                            datetime.utcnow().isoformat()
 
                     }
 
-                    results[task.name] = result
+                    results[
+                        task.name
+                    ] = result
 
-                    context_manager.save_result(
-                        task.name,
-                        result
+                    failed.add(
+                        task.name
                     )
 
-                    if task.retries < task.max_retries:
-
-                        task.retries += 1
-
-                        task_scheduler.retry(
-
-                            task,
-
-                            task.retries,
-
-                            priority=task.priority
-
-                        )
-
-                    else:
-
-                        failed.add(task.name)
-
-                    completed.add(task.name)
+                    completed.add(
+                        task.name
+                    )
 
                     progress = True
 
-                    agent_bus.publish(
-
-                        "task_failed",
-
-                        Event(
-
-                            sender="workflow_engine",
-
-                            receiver="*",
-
-                            action=task.action,
-
-                            payload=result
-
-                        )
-
-                    )
-
                     continue
 
-                # --------------------------------------------
-                # Resolve Dependencies
-                # --------------------------------------------
+                # -------------------------------------------------
+                # Resolve arguments
+                # -------------------------------------------------
 
-                resolved_kwargs = dependency_resolver.resolve(
-                    task.kwargs
+                resolved_kwargs = self._resolve_kwargs(
+                    task.kwargs,
+                    results
                 )
 
-                # --------------------------------------------
+                # -------------------------------------------------
                 # Execute
-                # --------------------------------------------
+                # -------------------------------------------------
 
                 started = time.time()
 
@@ -212,73 +270,38 @@ class WorkflowEngine:
 
                         "action": task.action,
 
-                        "execution_time": duration,
+                        "execution_time":
+                            duration,
 
                         "result": output
 
                     }
 
-                    results[task.name] = result
-                    context_manager.set(
+                    results[
+                        task.name
+                    ] = result
 
-                            f"history_{task.name}",
-
-                            result
-
-                        )
-                    # ----------------------------------------
-                    # Save Result
-                    # ----------------------------------------
+                    # -------------------------------------------------
+                    # Save output into context
+                    # -------------------------------------------------
 
                     context_manager.save_result(
                         task.name,
                         output
                     )
 
-                    # ----------------------------------------
-                    # Update Shared Context
-                    # ----------------------------------------
+                    if isinstance(
+                        output,
+                        dict
+                    ):
 
-                    if isinstance(output, dict):
+                        context_manager.update(
+                            output
+                        )
 
-                        context_manager.update(output)
-
-                        mappings = {
-
-                            "project": "project_name",
-
-                            "path": "project_path",
-
-                            "plan": "plan",
-
-                            "execution": "execution",
-
-                            "review": "review",
-
-                            "security": "security",
-
-                            "testing": "testing",
-
-                            "fixes": "fixes",
-
-                            "reflection": "reflection",
-
-                            "github": "github"
-
-                        }
-
-                        for key, ctx_key in mappings.items():
-
-                            if key in output:
-
-                                context_manager.set(
-                                    ctx_key,
-                                    output[key]
-                                )
-
-                    # ----------------------------------------
-                    # Publish Event
-                    # ----------------------------------------
+                    # -------------------------------------------------
+                    # Event
+                    # -------------------------------------------------
 
                     agent_bus.publish(
 
@@ -298,7 +321,7 @@ class WorkflowEngine:
 
                     )
 
-                except Exception as e:
+                except Exception as error:
 
                     duration = round(
                         time.time() - started,
@@ -315,20 +338,25 @@ class WorkflowEngine:
 
                         "action": task.action,
 
-                        "execution_time": duration,
+                        "execution_time":
+                            duration,
 
-                        "error": str(e)
+                        "error": str(error)
 
                     }
 
-                    results[task.name] = result
+                    results[
+                        task.name
+                    ] = result
+
+                    failed.add(
+                        task.name
+                    )
 
                     context_manager.save_result(
                         task.name,
                         result
                     )
-
-                    failed.add(task.name)
 
                     agent_bus.publish(
 
@@ -348,13 +376,15 @@ class WorkflowEngine:
 
                     )
 
-                completed.add(task.name)
+                completed.add(
+                    task.name
+                )
 
                 progress = True
 
-            # =================================================
-            # Deadlock Detection
-            # =================================================
+            # =====================================================
+            # DEADLOCK
+            # =====================================================
 
             if not progress:
 
@@ -364,7 +394,8 @@ class WorkflowEngine:
 
                     for task in tasks
 
-                    if task.name not in completed
+                    if task.name
+                    not in completed
 
                 ]
 
@@ -372,66 +403,67 @@ class WorkflowEngine:
 
                     "success": False,
 
-                    "error": "Workflow deadlock detected.",
+                    "error":
+                        "Workflow deadlock detected.",
 
-                    "remaining_tasks": remaining,
+                    "remaining_tasks":
+                        remaining,
 
-                    "results": results,
+                    "results":
+                        results,
 
-                    "context": context_manager.all()
+                    "context":
+                        context_manager.all()
 
                 }
-            context_manager.set(
-
-                "workflow_time",
-
-                workflow_time
-
-            )
-
-            context_manager.set(
-
-                "completed_tasks",
-
-                len(completed)
-
-            )
-
-            context_manager.set(
-
-                "failed_tasks",
-
-                len(failed)
-
-            )            
 
         # =====================================================
-        # Workflow Finished
+        # FINISHED
         # =====================================================
 
         workflow_time = round(
-
-            time.time() - workflow_start,
-
+            time.time()
+            - workflow_start,
             3
+        )
 
+        context_manager.set(
+            "workflow_time",
+            workflow_time
+        )
+
+        context_manager.set(
+            "completed_tasks",
+            len(completed)
+        )
+
+        context_manager.set(
+            "failed_tasks",
+            len(failed)
         )
 
         return {
 
-            "success": len(failed) == 0,
+            "success":
+                len(failed) == 0,
 
-            "workflow_time": workflow_time,
+            "workflow_time":
+                workflow_time,
 
-            "total_tasks": len(tasks),
+            "total_tasks":
+                len(tasks),
 
-            "completed_tasks": len(completed),
+            "completed_tasks":
+                len(completed),
 
-            "failed_tasks": len(failed),
+            "failed_tasks":
+                len(failed),
 
-            "results": results,
+            "results":
+                results,
 
-            "context": context_manager.all()
+            "context":
+                context_manager.all()
 
         }
 

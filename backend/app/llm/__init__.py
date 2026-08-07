@@ -1,7 +1,5 @@
-from app.llm.router import model_router
-from app.llm.manager import llm_manager
+from app.llm.model_router import model_router
 
-import app.llm.groq
-import app.llm.openai
-import app.llm.ollama
-import app.llm.huggingface
+__all__ = [
+    "model_router"
+]

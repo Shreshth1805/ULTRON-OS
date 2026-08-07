@@ -37,6 +37,13 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+class ProjectRequest(BaseModel):
+
+    project_name: str
+
+    description: str
+
+
 # =========================================================
 # CHAT
 # =========================================================
@@ -82,7 +89,7 @@ def test_code(
 
 
 # =========================================================
-# GET CONVERSATION MEMORY
+# MEMORY
 # =========================================================
 
 @router.get("/memory/{session_id}")
@@ -98,10 +105,6 @@ def conversation_history(
     }
 
 
-# =========================================================
-# CLEAR CONVERSATION MEMORY
-# =========================================================
-
 @router.delete("/memory/{session_id}")
 def delete_conversation(
     session_id: str
@@ -116,23 +119,17 @@ def delete_conversation(
         "message": "Conversation memory cleared."
     }
 
-class ProjectRequest(BaseModel):
 
-    project_name: str
-
-    description: str
+# =========================================================
+# PROJECT BUILD
+# =========================================================
 
 @router.post("/project/build")
 def build_project(
-
     request: ProjectRequest
-
 ):
 
     return software_engineer_agent.build_project(
-
         request.project_name,
-
         request.description
-
-    )    
+    )

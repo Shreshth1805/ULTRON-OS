@@ -22,12 +22,13 @@ def register_tool(name, tool):
     """
 
     _TOOLS[name] = tool
+
     return tool
 
 
 def get_tool(name):
     """
-    Get tool by name.
+    Get a registered tool.
     """
 
     return _TOOLS.get(name)
@@ -38,12 +39,14 @@ def list_tools():
     Return all registered tools.
     """
 
-    return sorted(_TOOLS.keys())
+    return sorted(
+        _TOOLS.keys()
+    )
 
 
 def get_code_tools():
     """
-    Return only coding tools.
+    Return only coding-related tools.
     """
 
     allowed = {
@@ -72,6 +75,7 @@ def register_agent(name, agent):
     """
 
     _AGENTS[name] = agent
+
     return agent
 
 
@@ -81,13 +85,14 @@ def get_agent(name):
     """
 
     if name in _AGENTS:
+
         return _AGENTS[name]
 
     try:
 
-        # =====================================================
-        # Software Engineer
-        # =====================================================
+        # =================================================
+        # SOFTWARE ENGINEER
+        # =================================================
 
         if name == "software_engineer_agent":
 
@@ -100,9 +105,9 @@ def get_agent(name):
                 software_engineer_agent
             )
 
-        # =====================================================
-        # AutoML
-        # =====================================================
+        # =================================================
+        # AUTOML
+        # =================================================
 
         elif name == "automl_agent":
 
@@ -115,9 +120,9 @@ def get_agent(name):
                 automl_agent
             )
 
-        # =====================================================
-        # Reviewer
-        # =====================================================
+        # =================================================
+        # REVIEWER
+        # =================================================
 
         elif name == "reviewer_agent":
 
@@ -130,9 +135,9 @@ def get_agent(name):
                 reviewer_agent
             )
 
-        # =====================================================
-        # Tester
-        # =====================================================
+        # =================================================
+        # TESTER
+        # =================================================
 
         elif name == "tester_agent":
 
@@ -145,9 +150,9 @@ def get_agent(name):
                 tester_agent
             )
 
-        # =====================================================
-        # Planner
-        # =====================================================
+        # =================================================
+        # PLANNER
+        # =================================================
 
         elif name == "planner_agent":
 
@@ -160,35 +165,25 @@ def get_agent(name):
                 planner_agent
             )
 
-        # =====================================================
-        # Project Builder
-        # =====================================================
+        # =================================================
+        # FIXER
+        # =================================================
 
-        elif name == "project_builder":
-
-            from app.orchestration.project_builder import (
-                project_builder
-            )
-
-            register_agent(
-                name,
-                project_builder
-            )
         elif name == "fixer_agent":
 
             from app.agents.fixer.agent import (
-
                 fixer_agent
-
             )
 
             register_agent(
-
                 name,
-
                 fixer_agent
-
             )
+
+        # =================================================
+        # VERSION
+        # =================================================
+
         elif name == "version_agent":
 
             from app.agents.version.agent import (
@@ -198,7 +193,12 @@ def get_agent(name):
             register_agent(
                 name,
                 version_agent
-            )            
+            )
+
+        # =================================================
+        # SKILL
+        # =================================================
+
         elif name == "skill_agent":
 
             from app.agents.skill.agent import (
@@ -208,7 +208,12 @@ def get_agent(name):
             register_agent(
                 name,
                 skill_agent
-            )            
+            )
+
+        # =================================================
+        # LEARNER
+        # =================================================
+
         elif name == "learner_agent":
 
             from app.agents.learner.agent import (
@@ -218,10 +223,11 @@ def get_agent(name):
             register_agent(
                 name,
                 learner_agent
-            )            
-        # =====================================================
+            )
+
+        # =================================================
         # PERFORMANCE
-        # =====================================================
+        # =================================================
 
         elif name == "performance_agent":
 
@@ -232,15 +238,27 @@ def get_agent(name):
             register_agent(
                 name,
                 performance_agent
-            )    
+            )
+
+        # =================================================
+        # SECURITY
+        # =================================================
+
         elif name == "security_agent":
 
-            from app.agents.security.agent import security_agent
+            from app.agents.security.agent import (
+                security_agent
+            )
 
             register_agent(
                 name,
                 security_agent
-            )   
+            )
+
+        # =================================================
+        # DOCKER
+        # =================================================
+
         elif name == "docker_agent":
 
             from app.agents.docker.agent import (
@@ -251,6 +269,11 @@ def get_agent(name):
                 name,
                 docker_agent
             )
+
+        # =================================================
+        # GITHUB
+        # =================================================
+
         elif name == "github_agent":
 
             from app.agents.github.agent import (
@@ -260,7 +283,12 @@ def get_agent(name):
             register_agent(
                 name,
                 github_agent
-            )    
+            )
+
+        # =================================================
+        # REFLECTION
+        # =================================================
+
         elif name == "reflection_agent":
 
             from app.agents.reflection.agent import (
@@ -270,10 +298,11 @@ def get_agent(name):
             register_agent(
                 name,
                 reflection_agent
-            )    
-        # =====================================================
-        # DevOps
-        # =====================================================
+            )
+
+        # =================================================
+        # DEVOPS
+        # =================================================
 
         elif name == "devops_agent":
 
@@ -288,15 +317,23 @@ def get_agent(name):
 
     except ImportError as e:
 
-        print(f"[Registry] Failed to load '{name}': {e}")
+        print(
+            f"[Registry] Failed to load "
+            f"'{name}': {e}"
+        )
+
         return None
 
-    return _AGENTS.get(name)
+    return _AGENTS.get(
+        name
+    )
 
 
 def list_agents():
     """
-    Return loaded agents.
+    Return all currently loaded agents.
     """
 
-    return sorted(_AGENTS.keys())
+    return sorted(
+        _AGENTS.keys()
+    )

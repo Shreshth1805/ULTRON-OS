@@ -13,9 +13,9 @@ class Orchestrator:
 
         tasks = [
 
-            # ===========================================
-            # Planner
-            # ===========================================
+            # =================================================
+            # 1. PLANNER
+            # =================================================
 
             WorkflowTask(
 
@@ -26,38 +26,40 @@ class Orchestrator:
                 action="create_plan",
 
                 kwargs={
-
                     "prompt": prompt
-
                 }
 
             ),
 
-            # ===========================================
-            # Project Builder
-            # ===========================================
+            # =================================================
+            # 2. BUILDER
+            # =================================================
 
             WorkflowTask(
 
                 name="builder",
 
-                agent="project_builder",
+                agent="software_engineer_agent",
 
                 action="build",
 
                 kwargs={
 
-                    "prompt": prompt
+                    "prompt": prompt,
+
+                    "plan": "$planner",
 
                 },
 
-                depends_on=["planner"]
+                depends_on=[
+                    "planner"
+                ]
 
             ),
 
-            # ===========================================
-            # Reviewer
-            # ===========================================
+            # =================================================
+            # 3. REVIEWER
+            # =================================================
 
             WorkflowTask(
 
@@ -69,17 +71,19 @@ class Orchestrator:
 
                 kwargs={
 
-                    "project_path": ""
+                    "project_path": "$builder.project_path"
 
                 },
 
-                depends_on=["builder"]
+                depends_on=[
+                    "builder"
+                ]
 
             ),
 
-            # ===========================================
-            # Security
-            # ===========================================
+            # =================================================
+            # 4. SECURITY
+            # =================================================
 
             WorkflowTask(
 
@@ -91,17 +95,19 @@ class Orchestrator:
 
                 kwargs={
 
-                    "project_path": ""
+                    "project_path": "$builder.project_path"
 
                 },
 
-                depends_on=["builder"]
+                depends_on=[
+                    "builder"
+                ]
 
             ),
 
-            # ===========================================
-            # Tester
-            # ===========================================
+            # =================================================
+            # 5. TESTER
+            # =================================================
 
             WorkflowTask(
 
@@ -113,22 +119,20 @@ class Orchestrator:
 
                 kwargs={
 
-                    "project_path": ""
+                    "project_path": "$builder.project_path"
 
                 },
 
                 depends_on=[
-
                     "reviewer",
                     "security"
-
                 ]
 
             ),
 
-            # ===========================================
-            # Auto Fix
-            # ===========================================
+            # =================================================
+            # 6. FIXER
+            # =================================================
 
             WorkflowTask(
 
@@ -140,17 +144,19 @@ class Orchestrator:
 
                 kwargs={
 
-                    "project_path": ""
+                    "project_path": "$builder.project_path"
 
                 },
 
-                depends_on=["tester"]
+                depends_on=[
+                    "tester"
+                ]
 
             ),
 
-            # ===========================================
-            # Reflection
-            # ===========================================
+            # =================================================
+            # 7. REFLECTION
+            # =================================================
 
             WorkflowTask(
 
@@ -160,39 +166,23 @@ class Orchestrator:
 
                 action="reflect",
 
-                kwargs={},
-
-                depends_on=["fixer"]
-
-            ),
-
-            # ===========================================
-            # GitHub Publish
-            # ===========================================
-
-            WorkflowTask(
-
-                name="github",
-
-                agent="github_agent",
-
-                action="publish",
-
                 kwargs={
 
-                    "project_name": "",
-
-                    "project_path": ""
+                    "project_path": "$builder.project_path"
 
                 },
 
-                depends_on=["reflection"]
+                depends_on=[
+                    "fixer"
+                ]
 
             )
 
         ]
 
-        return workflow_engine.execute(tasks)
+        return workflow_engine.execute(
+            tasks
+        )
 
 
 orchestrator = Orchestrator()
