@@ -1,3 +1,9 @@
+# =========================================================
+# ULTRON ORCHESTRATOR
+# =========================================================
+
+import os
+
 from app.orchestration.workflow_engine import (
     workflow_engine,
     WorkflowTask
@@ -5,17 +11,46 @@ from app.orchestration.workflow_engine import (
 
 
 class Orchestrator:
+    """
+    Main ULTRON workflow coordinator.
+
+    Flow:
+
+        User Request
+             ↓
+          Planner
+             ↓
+        Engineer
+             ↓
+          Reviewer
+             ↓
+         Security
+             ↓
+          Tester
+             ↓
+           Fixer
+             ↓
+        Reflection
+             ↓
+          GitHub
+    """
+
+    # =====================================================
+    # EXECUTE
+    # =====================================================
 
     def execute(
         self,
         prompt: str
     ):
 
-        tasks = [
+        tasks = []
 
-            # =================================================
-            # 1. PLANNER
-            # =================================================
+        # =================================================
+        # 1. PLANNER
+        # =================================================
+
+        tasks.append(
 
             WorkflowTask(
 
@@ -29,11 +64,15 @@ class Orchestrator:
                     "prompt": prompt
                 }
 
-            ),
+            )
 
-            # =================================================
-            # 2. BUILDER
-            # =================================================
+        )
+
+        # =================================================
+        # 2. SOFTWARE ENGINEER
+        # =================================================
+
+        tasks.append(
 
             WorkflowTask(
 
@@ -43,23 +82,32 @@ class Orchestrator:
 
                 action="build",
 
+                # IMPORTANT:
+                # Do NOT pass plan= here.
+                #
+                # Your current SoftwareEngineerAgent.build()
+                # does not accept a "plan" keyword argument.
+                #
+                # The engineer can retrieve the planner result
+                # from workflow context if required.
+
                 kwargs={
-
-                    "prompt": prompt,
-
-                    "plan": "$planner",
-
+                    "prompt": prompt
                 },
 
                 depends_on=[
                     "planner"
                 ]
 
-            ),
+            )
 
-            # =================================================
-            # 3. REVIEWER
-            # =================================================
+        )
+
+        # =================================================
+        # 3. REVIEWER
+        # =================================================
+
+        tasks.append(
 
             WorkflowTask(
 
@@ -71,7 +119,7 @@ class Orchestrator:
 
                 kwargs={
 
-                    "project_path": "$builder.project_path"
+                    "project_path": "$project_path"
 
                 },
 
@@ -79,35 +127,70 @@ class Orchestrator:
                     "builder"
                 ]
 
-            ),
+            )
 
-            # =================================================
-            # 4. SECURITY
-            # =================================================
+        )
 
-            WorkflowTask(
+        # =================================================
+        # 4. SECURITY
+        # =================================================
 
-                name="security",
+        # Security is optional for now.
+        #
+        # Your current security agent has:
+        #
+        #     No module named 'app.base_agent'
+        #
+        # Therefore we only add it when explicitly enabled.
 
-                agent="security_agent",
+        security_enabled = os.getenv(
+            "ULTRON_ENABLE_SECURITY",
+            "false"
+        ).lower() in {
+            "1",
+            "true",
+            "yes",
+            "on"
+        }
 
-                action="review_project",
+        if security_enabled:
 
-                kwargs={
+            tasks.append(
 
-                    "project_path": "$builder.project_path"
+                WorkflowTask(
 
-                },
+                    name="security",
 
-                depends_on=[
-                    "builder"
-                ]
+                    agent="security_agent",
 
-            ),
+                    action="review_project",
 
-            # =================================================
-            # 5. TESTER
-            # =================================================
+                    kwargs={
+                        "project_path": "$project_path"
+                    },
+
+                    depends_on=[
+                        "builder"
+                    ]
+
+                )
+
+            )
+
+        # =================================================
+        # 5. TESTER
+        # =================================================
+
+        tester_dependencies = [
+            "reviewer"
+        ]
+
+        if security_enabled:
+            tester_dependencies.append(
+                "security"
+            )
+
+        tasks.append(
 
             WorkflowTask(
 
@@ -118,21 +201,20 @@ class Orchestrator:
                 action="test_project",
 
                 kwargs={
-
-                    "project_path": "$builder.project_path"
-
+                    "project_path": "$project_path"
                 },
 
-                depends_on=[
-                    "reviewer",
-                    "security"
-                ]
+                depends_on=tester_dependencies
 
-            ),
+            )
 
-            # =================================================
-            # 6. FIXER
-            # =================================================
+        )
+
+        # =================================================
+        # 6. FIXER
+        # =================================================
+
+        tasks.append(
 
             WorkflowTask(
 
@@ -140,23 +222,29 @@ class Orchestrator:
 
                 agent="fixer_agent",
 
-                action="fix_project",
+                # Your current FixerAgent does not expose
+                # fix_project().
+                #
+                # Use "fix" if available.
+                action="fix",
 
                 kwargs={
-
-                    "project_path": "$builder.project_path"
-
+                    "project_path": "$project_path"
                 },
 
                 depends_on=[
                     "tester"
                 ]
 
-            ),
+            )
 
-            # =================================================
-            # 7. REFLECTION
-            # =================================================
+        )
+
+        # =================================================
+        # 7. REFLECTION
+        # =================================================
+
+        tasks.append(
 
             WorkflowTask(
 
@@ -166,11 +254,9 @@ class Orchestrator:
 
                 action="reflect",
 
-                kwargs={
-
-                    "project_path": "$builder.project_path"
-
-                },
+                # Do not pass project_path here.
+                # Your current reflect() does not accept it.
+                kwargs={},
 
                 depends_on=[
                     "fixer"
@@ -178,11 +264,64 @@ class Orchestrator:
 
             )
 
-        ]
+        )
 
-        return workflow_engine.execute(
+        # =================================================
+        # 8. GITHUB
+        # =================================================
+
+        # NEVER load GitHub unless a token exists.
+        #
+        # Otherwise importing github_client raises:
+        #
+        # ValueError:
+        # GITHUB_TOKEN not found.
+
+        github_enabled = bool(
+            os.getenv("GITHUB_TOKEN")
+        )
+
+        if github_enabled:
+
+            tasks.append(
+
+                WorkflowTask(
+
+                    name="github",
+
+                    agent="github_agent",
+
+                    action="publish",
+
+                    kwargs={
+
+                        "project_name": "$project_name",
+
+                        "project_path": "$project_path"
+
+                    },
+
+                    depends_on=[
+                        "reflection"
+                    ]
+
+                )
+
+            )
+
+        # =================================================
+        # EXECUTE WORKFLOW
+        # =================================================
+
+        result = workflow_engine.execute(
             tasks
         )
 
+        return result
+
+
+# =========================================================
+# GLOBAL ORCHESTRATOR
+# =========================================================
 
 orchestrator = Orchestrator()

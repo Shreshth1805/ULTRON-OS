@@ -1,4 +1,27 @@
-from typing import Dict, List
+"""
+ULTRON Memory Manager
+
+Provides a single interface for:
+
+    - User memories
+    - Project memories
+    - Agent knowledge
+    - Workflow history
+    - Execution results
+
+Uses:
+
+    In-memory storage
+        +
+    Vector store for semantic search
+
+This module is intentionally independent from the older
+app.memory package.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from app.memory_v2.memory_store import MemoryItem
@@ -7,88 +30,92 @@ from app.memory_v2.vector_store import vector_store
 
 class MemoryManager:
     """
-    Long-term memory manager for ULTRON.
-
-    Stores:
-    - User memories
-    - Agent knowledge
-    - Project history
-    - Execution results
-
-    Backed by:
-    - In-memory dictionary
-    - Chroma Vector Database
+    Central long-term memory manager for ULTRON.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         self._memory: Dict[str, MemoryItem] = {}
 
-    # =====================================================
-    # Add Memory
-    # =====================================================
+    # =========================================================
+    # ADD MEMORY
+    # =========================================================
 
     def add(
         self,
         category: str,
         content: str,
-        metadata: Dict | None = None
+        metadata: Optional[Dict[str, Any]] = None
     ) -> str:
+
+        if not category:
+            raise ValueError(
+                "Memory category cannot be empty."
+            )
+
+        if content is None:
+            raise ValueError(
+                "Memory content cannot be None."
+            )
+
+        content = str(content)
 
         memory_id = str(uuid4())
 
-        metadata = metadata or {}
+        metadata = dict(
+            metadata or {}
+        )
 
         item = MemoryItem(
-
             id=memory_id,
-
             category=category,
-
             content=content,
-
             metadata=metadata
-
         )
 
         self._memory[memory_id] = item
 
-        # -----------------------------------------------
-        # Store inside Vector DB
-        # -----------------------------------------------
+        # -----------------------------------------------------
+        # Vector Store
+        # -----------------------------------------------------
 
-        vector_store.add_text(
+        try:
 
-            text=content,
+            vector_store.add_text(
+                text=content,
+                metadata={
+                    "id": memory_id,
+                    "category": category,
+                    **metadata
+                }
+            )
 
-            metadata={
+        except Exception as exc:
 
-                "id": memory_id,
-
-                "category": category,
-
-                **metadata
-
-            }
-
-        )
+            # Do not destroy the primary in-memory memory
+            # if the vector database is temporarily unavailable.
+            print(
+                f"[MemoryManager] Vector store add failed: {exc}"
+            )
 
         return memory_id
 
-    # =====================================================
-    # Get Memory
-    # =====================================================
+    # =========================================================
+    # GET MEMORY
+    # =========================================================
 
     def get(
         self,
         memory_id: str
-    ):
+    ) -> Optional[MemoryItem]:
 
-        return self._memory.get(memory_id)
+        return self._memory.get(
+            memory_id
+        )
 
-    # =====================================================
-    # Delete Memory
-    # =====================================================
+    # =========================================================
+    # DELETE MEMORY
+    # =========================================================
 
     def delete(
         self,
@@ -96,127 +123,152 @@ class MemoryManager:
     ) -> bool:
 
         if memory_id not in self._memory:
-
             return False
 
         del self._memory[memory_id]
 
         try:
 
-            vector_store.delete([memory_id])
+            vector_store.delete(
+                [memory_id]
+            )
 
-        except Exception:
+        except Exception as exc:
 
-            pass
+            print(
+                f"[MemoryManager] Vector delete failed: {exc}"
+            )
 
         return True
 
-    # =====================================================
-    # Update Memory
-    # =====================================================
+    # =========================================================
+    # UPDATE MEMORY
+    # =========================================================
 
     def update(
         self,
         memory_id: str,
-        content: str = None,
-        metadata: Dict = None
+        content: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
 
-        item = self._memory.get(memory_id)
+        item = self._memory.get(
+            memory_id
+        )
 
         if item is None:
-
             return False
+
+        # -----------------------------------------------------
+        # Update content
+        # -----------------------------------------------------
 
         if content is not None:
 
-            item.content = content
+            item.content = str(
+                content
+            )
+
+        # -----------------------------------------------------
+        # Update metadata
+        # -----------------------------------------------------
 
         if metadata is not None:
 
-            item.metadata.update(metadata)
+            item.metadata.update(
+                metadata
+            )
 
-        # -----------------------------------------------
-        # Refresh Vector DB
-        # -----------------------------------------------
+        # -----------------------------------------------------
+        # Refresh vector representation
+        # -----------------------------------------------------
 
         try:
 
-            vector_store.delete([memory_id])
+            vector_store.delete(
+                [memory_id]
+            )
 
-        except Exception:
+        except Exception as exc:
 
-            pass
+            print(
+                f"[MemoryManager] Vector delete failed during update: {exc}"
+            )
 
-        vector_store.add_text(
+        try:
 
-            text=item.content,
+            vector_store.add_text(
+                text=item.content,
+                metadata={
+                    "id": memory_id,
+                    "category": item.category,
+                    **item.metadata
+                }
+            )
 
-            metadata={
+        except Exception as exc:
 
-                "id": memory_id,
-
-                "category": item.category,
-
-                **item.metadata
-
-            }
-
-        )
+            print(
+                f"[MemoryManager] Vector update failed: {exc}"
+            )
 
         return True
 
-    # =====================================================
-    # List Memories
-    # =====================================================
+    # =========================================================
+    # LIST MEMORIES
+    # =========================================================
 
     def list(
         self,
-        category: str = None
+        category: Optional[str] = None
     ) -> List[MemoryItem]:
 
         if category is None:
 
             return list(
-
                 self._memory.values()
-
             )
 
         return [
-
             item
-
             for item in self._memory.values()
-
             if item.category == category
-
         ]
 
-    # =====================================================
-    # Keyword Search
-    # =====================================================
+    # =========================================================
+    # SEARCH BY KEYWORD
+    # =========================================================
 
     def search(
         self,
-        query: str
+        query: str,
+        category: Optional[str] = None
     ) -> List[MemoryItem]:
+
+        if not query:
+            return []
 
         query = query.lower()
 
-        return [
+        results = []
 
-            item
+        for item in self._memory.values():
 
-            for item in self._memory.values()
+            if category is not None:
+                if item.category != category:
+                    continue
 
-            if query in item.content.lower()
+            if query in item.content.lower():
 
-        ]
+                results.append(
+                    item
+                )
 
-    # =====================================================
-    # Semantic Search
-    # =====================================================
+        return results
+
+    # =========================================================
+    # SEMANTIC SEARCH
+    # =========================================================
 
     def semantic_search(
         self,
@@ -224,51 +276,127 @@ class MemoryManager:
         k: int = 5
     ):
 
-        return vector_store.similarity_search(
+        if not query:
+            return []
 
-            query=query,
+        if k <= 0:
+            return []
 
-            k=k
+        try:
 
+            return vector_store.similarity_search(
+                query=query,
+                k=k
+            )
+
+        except Exception as exc:
+
+            print(
+                f"[MemoryManager] Semantic search failed: {exc}"
+            )
+
+            return []
+
+    # =========================================================
+    # REMEMBER PROJECT
+    # =========================================================
+
+    def remember_project(
+        self,
+        project_name: str,
+        project_path: str,
+        description: str = ""
+    ) -> str:
+
+        return self.add(
+            category="project",
+            content=(
+                f"Project: {project_name}\n"
+                f"Path: {project_path}\n"
+                f"Description: {description}"
+            ),
+            metadata={
+                "project_name": project_name,
+                "project_path": project_path
+            }
         )
 
-    # =====================================================
-    # Stats
-    # =====================================================
+    # =========================================================
+    # REMEMBER WORKFLOW RESULT
+    # =========================================================
 
-    def stats(self):
+    def remember_workflow(
+        self,
+        task_name: str,
+        result: Any
+    ) -> str:
 
-        categories = {}
+        return self.add(
+            category="workflow",
+            content=str(result),
+            metadata={
+                "task_name": task_name
+            }
+        )
+
+    # =========================================================
+    # REMEMBER AGENT RESULT
+    # =========================================================
+
+    def remember_agent_result(
+        self,
+        agent: str,
+        action: str,
+        result: Any
+    ) -> str:
+
+        return self.add(
+            category="agent_result",
+            content=str(result),
+            metadata={
+                "agent": agent,
+                "action": action
+            }
+        )
+
+    # =========================================================
+    # STATS
+    # =========================================================
+
+    def stats(self) -> Dict[str, Any]:
+
+        categories: Dict[str, int] = {}
 
         for item in self._memory.values():
 
             categories[item.category] = (
-
                 categories.get(
-
                     item.category,
-
                     0
-
                 ) + 1
-
             )
 
+        try:
+
+            vector_count = vector_store.count()
+
+        except Exception:
+
+            vector_count = 0
+
         return {
-
-            "total_memories": len(self._memory),
-
-            "vector_memories": vector_store.count(),
-
+            "total_memories": len(
+                self._memory
+            ),
+            "vector_memories": vector_count,
             "categories": categories
-
         }
 
-    # =====================================================
-    # Clear Everything
-    # =====================================================
+    # =========================================================
+    # CLEAR
+    # =========================================================
 
-    def clear(self):
+    def clear(self) -> None:
 
         self._memory.clear()
 
@@ -276,9 +404,15 @@ class MemoryManager:
 
             vector_store.clear()
 
-        except Exception:
+        except Exception as exc:
 
-            pass
+            print(
+                f"[MemoryManager] Vector clear failed: {exc}"
+            )
 
+
+# =========================================================
+# GLOBAL MEMORY MANAGER
+# =========================================================
 
 memory_manager = MemoryManager()

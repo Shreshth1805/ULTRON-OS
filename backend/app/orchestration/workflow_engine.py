@@ -1,19 +1,21 @@
-from dataclasses import dataclass, field
-from typing import Dict, List
-from datetime import datetime
+# =========================================================
+# ULTRON WORKFLOW ENGINE
+# =========================================================
+
+import inspect
 import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 from app.tools.registry import get_agent
-
-from app.communication import (
-    agent_bus,
-    Event
+from app.orchestration.dependency_resolver import (
+    dependency_resolver
 )
 
-from app.orchestration.context_manager import (
-    context_manager
-)
 
+# =========================================================
+# WORKFLOW TASK
+# =========================================================
 
 @dataclass
 class WorkflowTask:
@@ -24,7 +26,7 @@ class WorkflowTask:
 
     action: str
 
-    kwargs: dict = field(
+    kwargs: Dict[str, Any] = field(
         default_factory=dict
     )
 
@@ -32,158 +34,93 @@ class WorkflowTask:
         default_factory=list
     )
 
-    priority: int = 100
 
-    retries: int = 0
-
-    max_retries: int = 2
-
-    timeout: int = 300
-
+# =========================================================
+# WORKFLOW ENGINE
+# =========================================================
 
 class WorkflowEngine:
 
-    # =========================================================
-    # RESOLVE VALUE
-    # =========================================================
+    def __init__(self):
 
-    def _resolve_value(
-        self,
-        value,
-        results
-    ):
+        self.results: Dict[str, Any] = {}
 
-        if not isinstance(
-            value,
-            str
-        ):
-
-            return value
-
-        # -----------------------------------------------------
-        # $planner
-        # -----------------------------------------------------
-
-        if value.startswith("$"):
-
-            expression = value[1:]
-
-            parts = expression.split(
-                "."
-            )
-
-            task_name = parts[0]
-
-            if task_name not in results:
-
-                return value
-
-            current = results[
-                task_name
-            ]
-
-            # -------------------------------------------------
-            # Navigate nested result
-            # -------------------------------------------------
-
-            for part in parts[1:]:
-
-                if isinstance(
-                    current,
-                    dict
-                ):
-
-                    current = current.get(
-                        part
-                    )
-
-                else:
-
-                    return None
-
-            return current
-
-        return value
-
-    # =========================================================
-    # RESOLVE KWARGS
-    # =========================================================
-
-    def _resolve_kwargs(
-        self,
-        kwargs,
-        results
-    ):
-
-        resolved = {}
-
-        for key, value in kwargs.items():
-
-            resolved[key] = self._resolve_value(
-                value,
-                results
-            )
-
-        return resolved
-
-    # =========================================================
+    # =====================================================
     # EXECUTE
-    # =========================================================
+    # =====================================================
 
     def execute(
         self,
         tasks: List[WorkflowTask]
     ):
 
-        context_manager.reset()
+        self.results = {}
 
-        results: Dict[str, dict] = {}
+        start_time = time.time()
 
-        completed = set()
+        completed = 0
+        failed = 0
 
-        failed = set()
+        for task in tasks:
 
-        workflow_start = time.time()
+            # ---------------------------------------------
+            # Dependency check
+            # ---------------------------------------------
 
-        task_map = {
-            task.name: task
-            for task in tasks
-        }
+            dependency_failed = False
 
-        # =====================================================
-        # MAIN LOOP
-        # =====================================================
+            for dependency in task.depends_on:
 
-        while len(completed) < len(tasks):
-
-            progress = False
-
-            # -------------------------------------------------
-            # Find executable tasks
-            # -------------------------------------------------
-
-            for task in tasks:
-
-                if task.name in completed:
-
-                    continue
-
-                # -------------------------------------------------
-                # Dependencies
-                # -------------------------------------------------
-
-                dependencies_ready = all(
-                    dep in completed
-                    for dep in task.depends_on
+                dependency_result = self.results.get(
+                    dependency
                 )
 
-                if not dependencies_ready:
+                if not dependency_result:
+                    dependency_failed = True
+                    break
 
-                    continue
+                if isinstance(
+                    dependency_result,
+                    dict
+                ):
 
-                # -------------------------------------------------
-                # Agent
-                # -------------------------------------------------
+                    if dependency_result.get(
+                        "success"
+                    ) is False:
+
+                        dependency_failed = True
+                        break
+
+            if dependency_failed:
+
+                result = {
+                    "success": False,
+                    "status": "skipped",
+                    "agent": task.agent,
+                    "action": task.action,
+                    "error": (
+                        "Dependency failed."
+                    )
+                }
+
+                self.results[
+                    task.name
+                ] = result
+
+                print(
+                    f"[SKIPPED] {task.agent}: "
+                    f"dependency failed"
+                )
+
+                failed += 1
+
+                continue
+
+            # ---------------------------------------------
+            # Load agent
+            # ---------------------------------------------
+
+            try:
 
                 agent = get_agent(
                     task.agent
@@ -191,281 +128,497 @@ class WorkflowEngine:
 
                 if agent is None:
 
-                    error = (
+                    raise RuntimeError(
                         f"Agent '{task.agent}' "
-                        f"not found."
+                        f"could not be loaded."
                     )
 
-                    result = {
+            except Exception as exc:
 
-                        "success": False,
-
-                        "status": "failed",
-
-                        "agent": task.agent,
-
-                        "action": task.action,
-
-                        "error": error,
-
-                        "timestamp":
-                            datetime.utcnow().isoformat()
-
-                    }
-
-                    results[
-                        task.name
-                    ] = result
-
-                    failed.add(
-                        task.name
-                    )
-
-                    completed.add(
-                        task.name
-                    )
-
-                    progress = True
-
-                    continue
-
-                # -------------------------------------------------
-                # Resolve arguments
-                # -------------------------------------------------
-
-                resolved_kwargs = self._resolve_kwargs(
-                    task.kwargs,
-                    results
-                )
-
-                # -------------------------------------------------
-                # Execute
-                # -------------------------------------------------
-
-                started = time.time()
-
-                try:
-
-                    method = getattr(
-                        agent,
-                        task.action
-                    )
-
-                    output = method(
-                        **resolved_kwargs
-                    )
-
-                    duration = round(
-                        time.time() - started,
-                        3
-                    )
-
-                    result = {
-
-                        "success": True,
-
-                        "status": "completed",
-
-                        "agent": task.agent,
-
-                        "action": task.action,
-
-                        "execution_time":
-                            duration,
-
-                        "result": output
-
-                    }
-
-                    results[
-                        task.name
-                    ] = result
-
-                    # -------------------------------------------------
-                    # Save output into context
-                    # -------------------------------------------------
-
-                    context_manager.save_result(
-                        task.name,
-                        output
-                    )
-
-                    if isinstance(
-                        output,
-                        dict
-                    ):
-
-                        context_manager.update(
-                            output
-                        )
-
-                    # -------------------------------------------------
-                    # Event
-                    # -------------------------------------------------
-
-                    agent_bus.publish(
-
-                        "task_completed",
-
-                        Event(
-
-                            sender=task.agent,
-
-                            receiver="*",
-
-                            action=task.action,
-
-                            payload=result
-
-                        )
-
-                    )
-
-                except Exception as error:
-
-                    duration = round(
-                        time.time() - started,
-                        3
-                    )
-
-                    result = {
-
-                        "success": False,
-
-                        "status": "failed",
-
-                        "agent": task.agent,
-
-                        "action": task.action,
-
-                        "execution_time":
-                            duration,
-
-                        "error": str(error)
-
-                    }
-
-                    results[
-                        task.name
-                    ] = result
-
-                    failed.add(
-                        task.name
-                    )
-
-                    context_manager.save_result(
-                        task.name,
-                        result
-                    )
-
-                    agent_bus.publish(
-
-                        "task_failed",
-
-                        Event(
-
-                            sender=task.agent,
-
-                            receiver="*",
-
-                            action=task.action,
-
-                            payload=result
-
-                        )
-
-                    )
-
-                completed.add(
-                    task.name
-                )
-
-                progress = True
-
-            # =====================================================
-            # DEADLOCK
-            # =====================================================
-
-            if not progress:
-
-                remaining = [
-
-                    task.name
-
-                    for task in tasks
-
-                    if task.name
-                    not in completed
-
-                ]
-
-                return {
-
+                result = {
                     "success": False,
+                    "status": "failed",
+                    "agent": task.agent,
+                    "action": task.action,
+                    "error": str(exc)
+                }
 
-                    "error":
-                        "Workflow deadlock detected.",
+                self.results[
+                    task.name
+                ] = result
 
-                    "remaining_tasks":
-                        remaining,
+                print(
+                    f"[FAILED] {task.agent}: "
+                    f"{exc}"
+                )
 
-                    "results":
-                        results,
+                failed += 1
 
-                    "context":
-                        context_manager.all()
+                continue
+
+            # ---------------------------------------------
+            # Find action
+            # ---------------------------------------------
+
+            action_method = getattr(
+                agent,
+                task.action,
+                None
+            )
+
+            # ---------------------------------------------
+            # Compatibility aliases
+            # ---------------------------------------------
+
+            if action_method is None:
+
+                aliases = {
+
+                    "fix_project": [
+                        "fix",
+                        "repair",
+                        "run"
+                    ],
+
+                    "review_project": [
+                        "review"
+                    ],
+
+                    "test_project": [
+                        "test"
+                    ],
+
+                    "build": [
+                        "build_project"
+                    ],
+
+                    "publish": [
+                        "push",
+                        "publish_project"
+                    ]
 
                 }
 
-        # =====================================================
-        # FINISHED
-        # =====================================================
+                for alternative in aliases.get(
+                    task.action,
+                    []
+                ):
 
-        workflow_time = round(
-            time.time()
-            - workflow_start,
-            3
-        )
+                    candidate = getattr(
+                        agent,
+                        alternative,
+                        None
+                    )
 
-        context_manager.set(
-            "workflow_time",
-            workflow_time
-        )
+                    if candidate is not None:
 
-        context_manager.set(
-            "completed_tasks",
-            len(completed)
-        )
+                        action_method = candidate
+                        break
 
-        context_manager.set(
-            "failed_tasks",
-            len(failed)
-        )
+            if action_method is None:
+
+                result = {
+                    "success": False,
+                    "status": "failed",
+                    "agent": task.agent,
+                    "action": task.action,
+                    "error": (
+                        f"Agent '{task.agent}' "
+                        f"does not have action "
+                        f"'{task.action}'."
+                    )
+                }
+
+                self.results[
+                    task.name
+                ] = result
+
+                print(
+                    f"[FAILED] {task.agent}: "
+                    f"{result['error']}"
+                )
+
+                failed += 1
+
+                continue
+
+            # ---------------------------------------------
+            # Resolve dependencies
+            # ---------------------------------------------
+
+            try:
+
+                resolved_kwargs = (
+                    dependency_resolver.resolve(
+                        task.kwargs
+                    )
+                )
+
+            except Exception as exc:
+
+                result = {
+                    "success": False,
+                    "status": "failed",
+                    "agent": task.agent,
+                    "action": task.action,
+                    "error": (
+                        f"Dependency resolution failed: "
+                        f"{exc}"
+                    )
+                }
+
+                self.results[
+                    task.name
+                ] = result
+
+                print(
+                    f"[FAILED] {task.agent}: "
+                    f"{exc}"
+                )
+
+                failed += 1
+
+                continue
+
+            # ---------------------------------------------
+            # Signature-safe arguments
+            # ---------------------------------------------
+
+            try:
+
+                resolved_kwargs = (
+                    self._filter_kwargs(
+                        action_method,
+                        resolved_kwargs
+                    )
+
+                )
+
+            except Exception:
+
+                pass
+
+            # ---------------------------------------------
+            # Execute
+            # ---------------------------------------------
+
+            task_start = time.time()
+
+            try:
+
+                output = action_method(
+                    **resolved_kwargs
+                )
+
+                execution_time = (
+                    time.time() - task_start
+                )
+
+                result = self._normalize_result(
+                    output,
+                    task,
+                    execution_time
+                )
+
+                self.results[
+                    task.name
+                ] = result
+
+                # -----------------------------------------
+                # Store useful outputs in shared context
+                # -----------------------------------------
+
+                self._store_context(
+                    task,
+                    result
+                )
+
+                if result.get(
+                    "success",
+                    True
+                ):
+
+                    completed += 1
+
+                    print(
+                        f"[SUCCESS] "
+                        f"{task.agent} "
+                        f"executed "
+                        f"{task.action}"
+                    )
+
+                else:
+
+                    failed += 1
+
+                    print(
+                        f"[FAILED] "
+                        f"{task.agent}: "
+                        f"{result}"
+                    )
+
+            except Exception as exc:
+
+                execution_time = (
+                    time.time() - task_start
+                )
+
+                result = {
+
+                    "success": False,
+
+                    "status": "failed",
+
+                    "agent": task.agent,
+
+                    "action": task.action,
+
+                    "execution_time": (
+                        execution_time
+                    ),
+
+                    "error": str(exc)
+
+                }
+
+                self.results[
+                    task.name
+                ] = result
+
+                failed += 1
+
+                print(
+                    f"[FAILED] {task.agent}: "
+                    f"{result}"
+                )
+
+        # =================================================
+        # FINAL RESULT
+        # =================================================
 
         return {
 
-            "success":
-                len(failed) == 0,
+            "success": (
+                failed == 0
+            ),
 
-            "workflow_time":
-                workflow_time,
+            "workflow_time": (
+                time.time() - start_time
+            ),
 
-            "total_tasks":
-                len(tasks),
+            "total_tasks": len(tasks),
 
-            "completed_tasks":
-                len(completed),
+            "completed_tasks": completed,
 
-            "failed_tasks":
-                len(failed),
+            "failed_tasks": failed,
 
-            "results":
-                results,
-
-            "context":
-                context_manager.all()
+            "results": self.results
 
         }
 
+    # =====================================================
+    # FILTER KWARGS
+    # =====================================================
+
+    def _filter_kwargs(
+        self,
+        method,
+        kwargs: Dict[str, Any]
+    ):
+
+        try:
+
+            signature = inspect.signature(
+                method
+            )
+
+        except Exception:
+
+            return kwargs
+
+        parameters = signature.parameters
+
+        # ---------------------------------------------
+        # If **kwargs exists, keep everything
+        # ---------------------------------------------
+
+        accepts_kwargs = any(
+
+            parameter.kind
+            == inspect.Parameter.VAR_KEYWORD
+
+            for parameter
+            in parameters.values()
+
+        )
+
+        if accepts_kwargs:
+
+            return kwargs
+
+        # ---------------------------------------------
+        # Keep only supported arguments
+        # ---------------------------------------------
+
+        return {
+
+            key: value
+
+            for key, value in kwargs.items()
+
+            if key in parameters
+
+        }
+
+    # =====================================================
+    # NORMALIZE RESULT
+    # =====================================================
+
+    def _normalize_result(
+        self,
+        output,
+        task: WorkflowTask,
+        execution_time: float
+    ):
+
+        if isinstance(
+            output,
+            dict
+        ):
+
+            result = dict(
+                output
+            )
+
+            result.setdefault(
+                "success",
+                True
+            )
+
+            result.setdefault(
+                "status",
+                "completed"
+            )
+
+            result.setdefault(
+                "agent",
+                task.agent
+            )
+
+            result.setdefault(
+                "action",
+                task.action
+            )
+
+            result.setdefault(
+                "execution_time",
+                execution_time
+            )
+
+            return result
+
+        return {
+
+            "success": True,
+
+            "status": "completed",
+
+            "agent": task.agent,
+
+            "action": task.action,
+
+            "execution_time": (
+                execution_time
+            ),
+
+            "result": output
+
+        }
+
+    # =====================================================
+    # STORE CONTEXT
+    # =====================================================
+
+    def _store_context(
+        self,
+        task: WorkflowTask,
+        result: Dict[str, Any]
+    ):
+
+        try:
+
+            from app.orchestration.context_manager import (
+                context_manager
+            )
+
+            # Store complete task result
+
+            context_manager.set(
+                task.name,
+                result
+            )
+
+            # ---------------------------------------------
+            # Automatically expose common project values
+            # ---------------------------------------------
+
+            if isinstance(
+                result,
+                dict
+            ):
+
+                for key in (
+                    "project_path",
+                    "project_name",
+                    "workspace",
+                    "path"
+                ):
+
+                    if key in result:
+
+                        context_manager.set(
+                            key,
+                            result[key]
+                        )
+
+                # -----------------------------------------
+                # Nested result
+                # -----------------------------------------
+
+                nested = result.get(
+                    "result"
+                )
+
+                if isinstance(
+                    nested,
+                    dict
+                ):
+
+                    for key in (
+                        "project_path",
+                        "project_name",
+                        "workspace",
+                        "path"
+                    ):
+
+                        if key in nested:
+
+                            context_manager.set(
+                                key,
+                                nested[key]
+                            )
+
+        except Exception as exc:
+
+            print(
+                f"[Workflow] "
+                f"Context storage warning: "
+                f"{exc}"
+            )
+
+
+# =========================================================
+# GLOBAL ENGINE
+# =========================================================
 
 workflow_engine = WorkflowEngine()

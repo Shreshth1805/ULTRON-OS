@@ -1,108 +1,131 @@
-"""
-ULTRON Software Engineer Agent
+# =========================================================
+# SOFTWARE ENGINEER AGENT
+# =========================================================
 
-Responsible for:
-- Planning projects
-- Determining project structure
-- Generating files
-- Writing files
-- Reviewing code
-- Executing Python files
-"""
-
-import json
 import re
+import time
 from pathlib import Path
+from typing import List
 
 from app.core.llm import llm
 
-from app.agents.software_engineer.planner import planner
-from app.agents.software_engineer.generator import generator
-from app.agents.software_engineer.reviewer import reviewer
-from app.agents.software_engineer.executor import executor
-
 from app.workspace.file_manager import (
-    write_project_file,
     get_project_path,
+    write_project_file,
+    list_project_files,
 )
 
 
 class SoftwareEngineerAgent:
+    """
+    ULTRON Software Engineer.
 
-    # =========================================================
+    Responsibilities:
+        1. Understand the project request.
+        2. Determine the project name.
+        3. Create an isolated workspace.
+        4. Extract the required files from the plan.
+        5. Generate code for every file.
+        6. Write files into the correct project directory.
+        7. Return the project path to the workflow context.
+
+    IMPORTANT:
+        This agent never writes to a global/fixed project such as
+        'ultron_generated_project'.
+    """
+
+    # =====================================================
+    # INITIALIZATION
+    # =====================================================
+
+    def __init__(self):
+
+        self.workspace_root = Path("workspace")
+
+        self.workspace_root.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+    # =====================================================
     # BUILD
-    # =========================================================
+    # =====================================================
 
     def build(
         self,
-        prompt: str,
-        plan=None,
-        project_name: str | None = None,
+        prompt: str
     ):
-        """
-        Build a complete project from a natural-language request.
-        """
 
-        # -----------------------------------------------------
-        # 1. Generate project plan
-        # -----------------------------------------------------
+        return self.build_project(
+            request=prompt
+        )
 
-        if not plan:
+    # =====================================================
+    # BUILD PROJECT
+    # =====================================================
 
-            plan = planner.create_plan(
-                prompt
+    def build_project(
+        self,
+        request: str,
+        project_name: str = None,
+        project_description: str = None,
+        plan: str = None
+    ):
+
+        start_time = time.time()
+
+        # -------------------------------------------------
+        # Normalize request
+        # -------------------------------------------------
+
+        if not request:
+            request = project_description or ""
+
+        if not request:
+            raise ValueError(
+                "Project request cannot be empty."
             )
 
-        # -----------------------------------------------------
-        # 2. Determine project name
-        # -----------------------------------------------------
+        # -------------------------------------------------
+        # Use supplied name or generate one
+        # -------------------------------------------------
 
-        if not project_name:
+        if project_name:
+
+            project_name = self._sanitize_project_name(
+                project_name
+            )
+
+        elif plan:
 
             project_name = self._extract_project_name(
-                prompt,
-                plan
+                plan,
+                request
             )
 
-        project_name = self._sanitize_project_name(
+        else:
+
+            project_name = self._generate_project_name(
+                request
+            )
+
+        # -------------------------------------------------
+        # NEVER use ultron_generated_project
+        # -------------------------------------------------
+
+        if project_name.lower() == "ultron_generated_project":
+
+            project_name = self._generate_project_name(
+                request
+            )
+
+        # -------------------------------------------------
+        # Create isolated project directory
+        # -------------------------------------------------
+
+        project_name = self._get_available_project_name(
             project_name
         )
-
-        # -----------------------------------------------------
-        # 3. Determine required files
-        # -----------------------------------------------------
-
-        files = self._extract_files(
-            plan
-        )
-
-        # -----------------------------------------------------
-        # Fallback
-        # -----------------------------------------------------
-
-        if not files:
-
-            files = self._infer_files_with_llm(
-                prompt,
-                plan
-            )
-
-        # -----------------------------------------------------
-        # Always have basic documentation
-        # -----------------------------------------------------
-
-        if "README.md" not in files:
-
-            files.insert(
-                0,
-                "README.md"
-            )
-
-        # -----------------------------------------------------
-        # 4. Generate every file
-        # -----------------------------------------------------
-
-        generated_files = []
 
         project_path = get_project_path(
             project_name
@@ -113,55 +136,143 @@ class SoftwareEngineerAgent:
             exist_ok=True
         )
 
-        for filename in files:
+        # -------------------------------------------------
+        # Create plan if one wasn't supplied
+        # -------------------------------------------------
 
-            filename = self._clean_filename(
-                filename
+        if not plan:
+
+            plan = self._create_plan(
+                request
             )
 
-            if not filename:
-                continue
+        # -------------------------------------------------
+        # Extract files
+        # -------------------------------------------------
+
+        files = self._extract_files(
+            plan
+        )
+
+        # -------------------------------------------------
+        # Safety fallback
+        # -------------------------------------------------
+
+        if not files:
+
+            files = self._generate_file_list(
+                request,
+                plan
+            )
+
+        # -------------------------------------------------
+        # Remove duplicates
+        # -------------------------------------------------
+
+        files = self._unique_files(
+            files
+        )
+
+        generated_files = []
+        failed_files = []
+
+        # =================================================
+        # GENERATE EACH FILE
+        # =================================================
+
+        for filename in files:
 
             try:
 
-                code = generator.generate_file(
-                    filename=filename,
-                    project_description=prompt,
-                    project_plan=plan
-                )
+                # -----------------------------------------
+                # Validate filename
+                # -----------------------------------------
 
-                # ---------------------------------------------
-                # Clean LLM markdown fences
-                # ---------------------------------------------
-
-                code = self._clean_generated_code(
-                    code
-                )
-
-                write_project_file(
-                    project_name,
-                    filename,
-                    code
-                )
-
-                generated_files.append(
+                filename = self._sanitize_filename(
                     filename
                 )
 
-            except Exception as error:
+                if not filename:
+                    continue
 
-                print(
-                    f"[SoftwareEngineer] "
-                    f"Failed generating {filename}: {error}"
+                # -----------------------------------------
+                # Generate code
+                # -----------------------------------------
+
+                code = self._generate_file(
+                    filename=filename,
+                    project_description=request,
+                    project_plan=plan
                 )
 
-        # -----------------------------------------------------
-        # 5. Return complete project information
-        # -----------------------------------------------------
+                # -----------------------------------------
+                # Clean LLM response
+                # -----------------------------------------
+
+                code = self._clean_code(
+                    code
+                )
+
+                # -----------------------------------------
+                # Write file
+                # -----------------------------------------
+
+                result = write_project_file(
+                    project_name=project_name,
+                    filename=filename,
+                    content=code
+                )
+
+                if result.get("success"):
+
+                    generated_files.append(
+                        filename
+                    )
+
+                else:
+
+                    failed_files.append(
+                        {
+                            "filename": filename,
+                            "error": result.get(
+                                "error",
+                                "Unknown error"
+                            )
+                        }
+                    )
+
+            except Exception as exc:
+
+                failed_files.append(
+                    {
+                        "filename": filename,
+                        "error": str(exc)
+                    }
+                )
+
+        # =================================================
+        # FINAL FILE SCAN
+        # =================================================
+
+        actual_files = list_project_files(
+            project_name
+        )
+
+        execution_time = round(
+            time.time() - start_time,
+            3
+        )
+
+        # =================================================
+        # RESULT
+        # =================================================
 
         return {
 
-            "success": len(generated_files) > 0,
+            "success": (
+                len(actual_files) > 0
+                and len(failed_files) == 0
+            ),
 
             "project": project_name,
 
@@ -171,87 +282,47 @@ class SoftwareEngineerAgent:
                 project_path
             ),
 
-            "plan": plan,
-
-            "files": generated_files,
-
-            "file_count": len(
-                generated_files
+            "path": str(
+                project_path
             ),
 
-            "message": (
-                f"Project '{project_name}' "
-                f"created with "
-                f"{len(generated_files)} files."
-            )
+            "description": request,
 
+            "plan": plan,
+
+            "files": actual_files,
+
+            "generated_files": generated_files,
+
+            "failed_files": failed_files,
+
+            "file_count": len(actual_files),
+
+            "execution_time": execution_time,
+
+            "message": (
+                f"Project '{project_name}' created "
+                f"with {len(actual_files)} files."
+            )
         }
 
-    # =========================================================
-    # BUILD PROJECT
-    # =========================================================
-
-    def build_project(
-        self,
-        project_name,
-        description
-    ):
-        """
-        Compatibility endpoint for /ai/project/build.
-        """
-
-        return self.build(
-            prompt=description,
-            project_name=project_name
-        )
-
-    # =========================================================
-    # REVIEW
-    # =========================================================
-
-    def review_code(
-        self,
-        code
-    ):
-
-        return reviewer.review(
-            code
-        )
-
-    # =========================================================
-    # EXECUTE
-    # =========================================================
-
-    def execute(
-        self,
-        file_path
-    ):
-
-        return executor.run_python(
-            file_path
-        )
-
-    # =========================================================
+    # =====================================================
     # PROJECT NAME
-    # =========================================================
+    # =====================================================
 
     def _extract_project_name(
         self,
-        prompt,
-        plan
-    ):
-
-        text = f"{plan}\n{prompt}"
+        plan: str,
+        prompt: str
+    ) -> str:
 
         patterns = [
 
-            r"Project Name\s*[:\-]\s*([A-Za-z0-9_\- ]+)",
+            r"Project Name\s*[:\-]\s*(.+)",
 
-            r"project\s+called\s+([A-Za-z0-9_\- ]+)",
+            r"Project\s+Name\s*[:\-]\s*(.+)",
 
-            r"project\s+named\s+([A-Za-z0-9_\- ]+)",
-
-            r"build\s+([A-Za-z0-9_\-]+)\s+project",
+            r"project_name\s*[:\-]\s*(.+)",
 
         ]
 
@@ -259,96 +330,342 @@ class SoftwareEngineerAgent:
 
             match = re.search(
                 pattern,
-                text,
+                plan,
                 re.IGNORECASE
             )
 
             if match:
 
-                return match.group(1).strip()
+                name = match.group(1).strip()
 
-        return "ultron_generated_project"
+                name = name.split(
+                    "\n"
+                )[0].strip()
 
-    # =========================================================
-    # SANITIZE PROJECT NAME
-    # =========================================================
+                name = name.strip(
+                    "`*_#:- "
+                )
 
-    def _sanitize_project_name(
+                if name:
+
+                    return self._sanitize_project_name(
+                        name
+                    )
+
+        return self._generate_project_name(
+            prompt
+        )
+
+    # =====================================================
+    # GENERATE PROJECT NAME
+    # =====================================================
+
+    def _generate_project_name(
         self,
-        name
-    ):
+        prompt: str
+    ) -> str:
 
-        name = re.sub(
-            r"[^A-Za-z0-9_\- ]",
-            "",
+        prompt_lower = prompt.lower()
+
+        # -----------------------------------------------
+        # Common application types
+        # -----------------------------------------------
+
+        keywords = [
+
+            "todo",
+            "chat",
+            "blog",
+            "ecommerce",
+            "e-commerce",
+            "authentication",
+            "auth",
+            "fastapi",
+            "api",
+            "dashboard",
+            "video",
+            "image",
+            "ml",
+            "machine learning",
+            "data",
+            "database",
+            "inventory",
+            "school",
+            "student",
+            "finance",
+
+        ]
+
+        selected = []
+
+        for keyword in keywords:
+
+            if keyword in prompt_lower:
+
+                cleaned = keyword.replace(
+                    "-",
+                    "_"
+                ).replace(
+                    " ",
+                    "_"
+                )
+
+                if cleaned not in selected:
+
+                    selected.append(
+                        cleaned
+                    )
+
+        if selected:
+
+            name = "_".join(
+                selected[:4]
+            )
+
+        else:
+
+            words = re.findall(
+                r"[a-zA-Z0-9]+",
+                prompt_lower
+            )
+
+            name = "_".join(
+                words[:5]
+            )
+
+        if not name:
+
+            name = "ultron_project"
+
+        return self._sanitize_project_name(
             name
         )
 
-        name = name.strip().replace(
-            " ",
-            "_"
+    # =====================================================
+    # SANITIZE PROJECT NAME
+    # =====================================================
+
+    def _sanitize_project_name(
+        self,
+        name: str
+    ) -> str:
+
+        name = str(name).strip()
+
+        name = name.replace(
+            "`",
+            ""
+        )
+
+        name = re.sub(
+            r"[^a-zA-Z0-9_\-]+",
+            "_",
+            name
+        )
+
+        name = re.sub(
+            r"_+",
+            "_",
+            name
+        )
+
+        name = name.strip(
+            "_-"
         )
 
         if not name:
 
-            name = "ultron_generated_project"
+            name = "ultron_project"
 
-        return name[:80]
+        return name.lower()
 
-    # =========================================================
+    # =====================================================
+    # AVAILABLE PROJECT NAME
+    # =====================================================
+
+    def _get_available_project_name(
+        self,
+        project_name: str
+    ) -> str:
+
+        candidate = project_name
+
+        counter = 1
+
+        while get_project_path(
+            candidate
+        ).exists():
+
+            candidate = (
+                f"{project_name}_{counter}"
+            )
+
+            counter += 1
+
+        return candidate
+
+    # =====================================================
+    # CREATE PLAN
+    # =====================================================
+
+    def _create_plan(
+        self,
+        request: str
+    ) -> str:
+
+        prompt = f"""
+You are a Senior Software Architect.
+
+Design a complete software project for:
+
+{request}
+
+Return a detailed development plan.
+
+The plan MUST contain:
+
+Project Name:
+Folder Structure:
+Files:
+Development Steps:
+
+Under Files, list EVERY important file that must be
+created for the project.
+
+Do not limit the project to only three files.
+
+Include:
+- application source code
+- configuration
+- models
+- schemas
+- services
+- routes/controllers
+- database files
+- tests
+- README
+- requirements/dependencies
+- Docker files when appropriate
+- frontend files when appropriate
+
+Make the project production-oriented.
+"""
+
+        response = llm.invoke(
+            prompt
+        )
+
+        return getattr(
+            response,
+            "content",
+            str(response)
+        )
+
+    # =====================================================
     # EXTRACT FILES FROM PLAN
-    # =========================================================
+    # =====================================================
 
     def _extract_files(
         self,
-        plan
-    ):
+        plan: str
+    ) -> List[str]:
 
         files = []
 
-        text = str(
-            plan
-        )
+        # -------------------------------------------------
+        # Look for explicit file paths
+        # -------------------------------------------------
 
-        # -----------------------------------------------------
-        # Find common file references
-        # -----------------------------------------------------
-
-        pattern = (
-            r"(?:^|\s)"
-            r"([A-Za-z0-9_.\-/]+"
-            r"\.(?:py|js|jsx|ts|tsx|json|yaml|yml|md|txt|"
-            r"html|css|scss|sql|env|toml|ini|cfg|sh))"
+        extensions = (
+            r"py|js|ts|tsx|jsx|html|css|json|yaml|yml|"
+            r"md|txt|sql|env|ini|toml|sh|bat|dockerfile"
         )
 
         matches = re.findall(
-            pattern,
-            text,
-            re.IGNORECASE
+            rf"""
+            (?:
+                [\w\-.]+/
+            )*
+            [\w\-.]+
+            \.(?:{extensions})
+            """,
+            plan,
+            re.IGNORECASE |
+            re.VERBOSE
         )
 
-        for filename in matches:
+        files.extend(
+            matches
+        )
 
-            filename = self._clean_filename(
-                filename
-            )
+        # -------------------------------------------------
+        # Backtick paths
+        # -------------------------------------------------
 
-            if filename and filename not in files:
+        backtick_matches = re.findall(
+            r"`([^`]+)`",
+            plan
+        )
+
+        for item in backtick_matches:
+
+            item = item.strip()
+
+            if self._looks_like_file(
+                item
+            ):
 
                 files.append(
-                    filename
+                    item
                 )
 
-        # -----------------------------------------------------
-        # Also parse bullet/list lines
-        # -----------------------------------------------------
+        return self._unique_files(
+            files
+        )
+
+    # =====================================================
+    # FALLBACK FILE GENERATOR
+    # =====================================================
+
+    def _generate_file_list(
+        self,
+        request: str,
+        plan: str
+    ) -> List[str]:
+
+        prompt = f"""
+Project request:
+
+{request}
+
+Project plan:
+
+{plan}
+
+Return ONLY a list of file paths that must be created.
+
+One file per line.
+
+Do not explain anything.
+
+Create a COMPLETE project, not a three-file demo.
+"""
+
+        response = llm.invoke(
+            prompt
+        )
+
+        text = getattr(
+            response,
+            "content",
+            str(response)
+        )
+
+        files = []
 
         for line in text.splitlines():
 
             line = line.strip()
-
-            if not line:
-                continue
 
             line = re.sub(
                 r"^[\-\*\d\.\)\s]+",
@@ -356,124 +673,104 @@ class SoftwareEngineerAgent:
                 line
             )
 
-            line = line.strip("` ")
-
-            if "/" in line or "\\" in line:
-
-                candidate = line.split(
-                    " ",
-                    1
-                )[0]
-
-                candidate = self._clean_filename(
-                    candidate
-                )
-
-                if (
-                    candidate
-                    and "." in candidate
-                    and candidate not in files
-                ):
-
-                    files.append(
-                        candidate
-                    )
-
-        return files
-
-    # =========================================================
-    # LLM FILE INFERENCE
-    # =========================================================
-
-    def _infer_files_with_llm(
-        self,
-        prompt,
-        plan
-    ):
-
-        inference_prompt = f"""
-You are a senior software architect.
-
-User request:
-{prompt}
-
-Project plan:
-{plan}
-
-Determine the complete list of files required to build
-this project.
-
-Return ONLY valid JSON.
-
-Format:
-
-{{
-    "files": [
-        "folder/file.py",
-        "folder/config.py",
-        "README.md"
-    ]
-}}
-
-Do not explain anything.
-"""
-
-        response = llm.invoke(
-            inference_prompt
-        )
-
-        content = getattr(
-            response,
-            "content",
-            str(response)
-        )
-
-        content = self._clean_generated_code(
-            content
-        )
-
-        try:
-
-            data = json.loads(
-                content
+            line = line.strip(
+                "` "
             )
 
-            files = data.get(
-                "files",
-                []
+            if self._looks_like_file(
+                line
+            ):
+
+                files.append(
+                    line
+                )
+
+        return self._unique_files(
+            files
+        )
+
+    # =====================================================
+    # LOOKS LIKE FILE
+    # =====================================================
+
+    def _looks_like_file(
+        self,
+        value: str
+    ) -> bool:
+
+        if not value:
+            return False
+
+        value = value.strip()
+
+        if "/" not in value and "\\" not in value:
+
+            return bool(
+                re.search(
+                    r"\.[a-zA-Z0-9]{1,10}$",
+                    value
+                )
             )
 
-            return [
-                self._clean_filename(
-                    f
-                )
-                for f in files
-                if self._clean_filename(f)
-            ]
+        return bool(
+            re.search(
+                r"\.[a-zA-Z0-9]{1,10}$",
+                value
+            )
+        )
 
-        except Exception:
+    # =====================================================
+    # UNIQUE FILES
+    # =====================================================
 
-            return []
-
-    # =========================================================
-    # CLEAN FILENAME
-    # =========================================================
-
-    def _clean_filename(
+    def _unique_files(
         self,
-        filename
-    ):
+        files: List[str]
+    ) -> List[str]:
 
-        if not filename:
+        result = []
 
-            return ""
+        seen = set()
+
+        for filename in files:
+
+            filename = self._sanitize_filename(
+                filename
+            )
+
+            if not filename:
+                continue
+
+            key = filename.lower()
+
+            if key in seen:
+                continue
+
+            seen.add(
+                key
+            )
+
+            result.append(
+                filename
+            )
+
+        return result
+
+    # =====================================================
+    # SANITIZE FILE NAME
+    # =====================================================
+
+    def _sanitize_filename(
+        self,
+        filename: str
+    ) -> str:
 
         filename = str(
             filename
         ).strip()
 
         filename = filename.strip(
-            "`\"' "
+            "`\"'"
         )
 
         filename = filename.replace(
@@ -481,32 +778,123 @@ Do not explain anything.
             "/"
         )
 
-        filename = filename.lstrip(
-            "./"
+        # -------------------------------------------------
+        # Remove accidental leading project directory
+        # -------------------------------------------------
+
+        filename = re.sub(
+            r"^workspace/[^/]+/",
+            "",
+            filename,
+            flags=re.IGNORECASE
         )
 
+        # -------------------------------------------------
+        # Remove ./ 
+        # -------------------------------------------------
+
+        filename = re.sub(
+            r"^\./+",
+            "",
+            filename
+        )
+
+        # -------------------------------------------------
         # Prevent absolute paths
-        filename = filename.replace(
-            ":",
-            ""
+        # -------------------------------------------------
+
+        filename = filename.lstrip(
+            "/"
         )
 
-        # Prevent traversal
-        parts = [
-            p for p in filename.split("/")
-            if p not in ("", ".", "..")
-        ]
+        # -------------------------------------------------
+        # Prevent directory traversal
+        # -------------------------------------------------
 
-        return "/".join(parts)
+        parts = []
 
-    # =========================================================
-    # CLEAN GENERATED CODE
-    # =========================================================
+        for part in filename.split("/"):
 
-    def _clean_generated_code(
+            if part in (
+                "",
+                "."
+            ):
+
+                continue
+
+            if part == "..":
+
+                continue
+
+            parts.append(
+                part
+            )
+
+        filename = "/".join(
+            parts
+        )
+
+        return filename
+
+    # =====================================================
+    # GENERATE FILE
+    # =====================================================
+
+    def _generate_file(
         self,
-        code
-    ):
+        filename: str,
+        project_description: str,
+        project_plan: str
+    ) -> str:
+
+        prompt = f"""
+You are ULTRON's Senior Software Engineer.
+
+PROJECT DESCRIPTION:
+{project_description}
+
+PROJECT PLAN:
+{project_plan}
+
+Generate the COMPLETE production-quality source code
+for this file:
+
+{filename}
+
+Requirements:
+
+1. Return ONLY the file contents.
+2. Do NOT use Markdown code fences.
+3. Do NOT explain the code.
+4. Make the code executable.
+5. Follow the architecture described in the plan.
+6. Ensure imports match the project structure.
+7. Do not create placeholder implementations unless
+   absolutely necessary.
+8. Include proper error handling.
+9. Use secure coding practices.
+10. Keep the implementation consistent with the other
+    project files.
+"""
+
+        response = llm.invoke(
+            prompt
+        )
+
+        return getattr(
+            response,
+            "content",
+            str(response)
+        )
+
+    # =====================================================
+    # CLEAN CODE
+    # =====================================================
+
+    def _clean_code(
+        self,
+        code: str
+    ) -> str:
 
         if code is None:
 
@@ -516,11 +904,16 @@ Do not explain anything.
             code
         ).strip()
 
-        # Remove markdown fences
+        # -------------------------------------------------
+        # Remove Markdown fences
+        # -------------------------------------------------
+
         code = re.sub(
-            r"^```[a-zA-Z0-9_+-]*\s*",
+            r"^```(?:python|py|javascript|js|typescript|"
+            r"ts|json|html|css|sql|yaml|yml|bash|sh)?\s*",
             "",
-            code
+            code,
+            flags=re.IGNORECASE
         )
 
         code = re.sub(
@@ -531,5 +924,9 @@ Do not explain anything.
 
         return code.strip()
 
+
+# =========================================================
+# GLOBAL AGENT INSTANCE
+# =========================================================
 
 software_engineer_agent = SoftwareEngineerAgent()

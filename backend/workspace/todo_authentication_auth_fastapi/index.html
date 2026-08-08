@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="#">Todos</a></li>
+                <li><a href="#">Users</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <section id="todo-list">
+            <h2>Todos</h2>
+            <ul id="todos">
+                <!-- Todo items will be rendered here -->
+            </ul>
+            <form id="create-todo">
+                <input type="text" id="todo-title" placeholder="Todo title">
+                <button type="submit">Create Todo</button>
+            </form>
+        </section>
+        <section id="user-list">
+            <h2>Users</h2>
+            <ul id="users">
+                <!-- User items will be rendered here -->
+            </ul>
+            <form id="create-user">
+                <input type="text" id="username" placeholder="Username">
+                <input type="password" id="password" placeholder="Password">
+                <button type="submit">Create User</button>
+            </form>
+        </section>
+    </main>
+    <script src="static/js/script.js"></script>
+</body>
+</html>
