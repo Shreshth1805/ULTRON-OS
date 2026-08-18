@@ -1,6 +1,6 @@
 from app.core.llm import llm
 from app.generators.prompts import SYSTEM_PROMPT
-from app.utils.text import strip_code_fence
+from app.utils.text import strip_code_fence, looks_like_file_path
 
 
 class ProjectGenerator:
@@ -17,7 +17,10 @@ Project:
 
 {description}
 
-Return ONLY a file list.
+Return ONLY a file list: one relative file path per line, nothing else.
+
+No comments, no shell commands, no explanations, no numbering or
+bullets - just the paths themselves.
 
 Example:
 
@@ -40,7 +43,7 @@ Dockerfile
 
             line = line.strip()
 
-            if line:
+            if line and looks_like_file_path(line):
 
                 files.append(line)
 

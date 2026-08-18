@@ -113,7 +113,8 @@ class ProjectBuilder:
 
                 code = file_generator.generate(
                     filename=filename,
-                    project_description=prompt
+                    project_description=prompt,
+                    other_files=files
                 )
 
                 workspace.write_file(

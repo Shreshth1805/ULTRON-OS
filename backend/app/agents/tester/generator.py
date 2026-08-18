@@ -25,7 +25,12 @@ class TestGenerator:
                     encoding="utf-8"
                 )
 
+                relative = file.relative_to(project)
+                module_path = ".".join(relative.with_suffix("").parts)
+
                 prompt = TEST_PROMPT.format(
+                    filename=str(relative),
+                    module_path=module_path,
                     code=code
                 )
 
