@@ -130,6 +130,25 @@ dependency isolation: a generated project only runs successfully if its
 imports happen to already be installed in `backend/.venv`. Don't assume
 arbitrary generated projects will execute correctly.
 
+### Don't trust an LLM response to match the format you asked for
+
+Beyond markdown fences (above), a model asked for "just a file list, one
+path per line" can still return install/run instructions instead of
+paths, and a model asked to test one file in isolation will guess at
+that file's import path if you don't tell it explicitly. Both bit
+`project_builder`'s pipeline in practice:
+`generators/project_generator.get_structure()` filters every candidate
+line through `app.utils.text.looks_like_file_path()` rather than trusting
+anything non-blank; `agents/tester/prompts.TEST_PROMPT` explicitly states
+the file's real dotted module path rather than leaving the model to
+infer it; `generators/file_generator.generate()` is told the project's
+full file list so it doesn't redefine something another file already
+owns. The pattern to follow for new generation code: validate/constrain
+what a "return only X" instruction actually produced rather than
+assuming compliance, and give the model any structural fact it would
+otherwise have to guess (paths, module names, what else exists) instead
+of hoping it infers correctly.
+
 ### `GROQ_MODEL` is not a stable constant
 
 Groq periodically retires model names. If chat/build requests start

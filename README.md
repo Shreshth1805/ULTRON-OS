@@ -20,17 +20,22 @@ Known limitations:
 
 - **Generated projects run in this app's own environment**, not an
   isolated one. `POST /projects/build` executes and tests generated code
-  using this venv's own interpreter (`sys.executable -m ...`), so a
-  generated project's imports only work if its dependencies happen to
-  already be installed here (FastAPI, pandas, etc. are). There is no
-  per-project dependency install yet.
-- **Generated test files live next to the source they test** (e.g.
-  `app/test_main.py` beside `app/main.py`), which trips up pytest's
-  default import-mode when the package has no `__init__.py`. Test
-  collection can fail for reasons unrelated to the generated code itself.
-- **The LLM doesn't always follow instructions.** File/test/reflection
-  generation and parsing are defensive (markdown fences get stripped,
-  JSON gets located inside surrounding prose) but not bulletproof.
+  via `sys.executable -m <module>` / `-m pytest`, run from the project's
+  own root so its internal imports resolve correctly — but there's still
+  no per-project dependency install, so a generated project's imports
+  only work if its dependencies happen to already be installed here
+  (FastAPI, pandas, etc. are). A generated entry point that starts a real
+  server (`uvicorn.run(...)`) is expected to time out rather than exit —
+  that's treated as success-shaped, not an error.
+- **LLM-generated test code can have its own bugs.** Generation is
+  defensive against the model not following instructions (markdown
+  fences get stripped, JSON gets located inside surrounding prose, file
+  lists get filtered to things that actually look like file paths, tests
+  are told the exact module path to import from) — but a generated test
+  can still be subtly wrong about the code it's testing, the same way a
+  human's first draft can be. Treat `testing: {"success": false}` in a
+  build result as "read what it says," not necessarily a bug in the
+  generated source.
 - **No real sandboxing.** Generated code runs as a real subprocess with
   a timeout, not in a container or restricted environment. Don't point
   this at untrusted prompts.
