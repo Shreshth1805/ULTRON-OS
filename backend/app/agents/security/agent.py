@@ -1,9 +1,9 @@
-from app.base_agent import BaseAgent
+from app.core.llm import llm
 
 from app.agents.security.prompts import SYSTEM_PROMPT
 
 
-class SecurityAgent(BaseAgent):
+class SecurityAgent:
 
     def review(
         self,
@@ -18,7 +18,15 @@ Code
 {code}
 """
 
-        return self.generate(prompt)
+        response = llm.invoke(prompt)
+
+        return {
+
+            "success": True,
+
+            "response": response.content
+
+        }
 
 
 security_agent = SecurityAgent()

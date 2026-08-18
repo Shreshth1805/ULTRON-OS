@@ -1,4 +1,4 @@
-import os
+from app.core.config import settings
 
 
 class GithubAuth:
@@ -6,7 +6,7 @@ class GithubAuth:
     @property
     def token(self):
 
-        token = os.getenv("GITHUB_TOKEN")
+        token = settings.GITHUB_TOKEN
 
         if not token:
 

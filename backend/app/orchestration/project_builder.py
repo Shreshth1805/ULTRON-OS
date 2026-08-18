@@ -149,6 +149,34 @@ class ProjectBuilder:
                 "success": False,
                 "error": str(e)
             }
+
+        # =====================================================
+        # Load Project Source Code Once
+        # =====================================================
+
+        python_files = list(
+            Path(project_path).rglob("*.py")
+        )
+
+        project_code = ""
+
+        for file in python_files:
+
+            try:
+
+                project_code += file.read_text(
+                    encoding="utf-8"
+                )
+
+                project_code += "\n\n"
+
+            except Exception:
+                pass
+
+        # =====================================================
+        # Emit Project Created Event
+        # =====================================================
+
         event = Event(
 
             type="PROJECT_CREATED",
@@ -169,7 +197,7 @@ class ProjectBuilder:
 
         event_results = dispatcher.emit(
             event
-        )            
+        )
 
         # =====================================================
         # Review
@@ -206,21 +234,32 @@ class ProjectBuilder:
 
             try:
 
-                code = ""
-
-                for file in Path(project_path).rglob("*.py"):
-
-                    code += file.read_text(
-                        encoding="utf-8"
-                    )
-
-                    code += "\n\n"
-
-                security_result = security.review(code)
+                security_result = security.review(project_code)
 
             except Exception as e:
 
                 security_result = {
+                    "success": False,
+                    "error": str(e)
+                }
+
+        # =====================================================
+        # Performance Review
+        # =====================================================
+
+        performance_result = None
+
+        performance = get_agent("performance_agent")
+
+        if performance:
+
+            try:
+
+                performance_result = performance.analyze(project_code)
+
+            except Exception as e:
+
+                performance_result = {
                     "success": False,
                     "error": str(e)
                 }
@@ -291,9 +330,6 @@ class ProjectBuilder:
                 reflection_result = reflection.reflect(
                     project=project_name,
                     execution=execution_result,
-                    review=review_result,
-                    security=security_result,
-                    performance=performance_result,
                     testing=testing_result,
                     review=review_result
                 )
@@ -304,139 +340,58 @@ class ProjectBuilder:
                     "success": False,
                     "error": str(e)
                 }
-            learner = get_agent(
-                "learner_agent"
-            )
 
-            learning_result = None
-
-            if learner:
-
-                try:
-
-                    learning_result = learner.learn(
-
-                        project=project_name,
-
-                        review=review_result,
-
-                        testing=testing_result,
-
-                        reflection=reflection_result
-
-                    )
-
-                except Exception as e:
-
-                    learning_result = {
-
-                        "success": False,
-
-                        "error": str(e)
-
-                    }                
         # =====================================================
-        # Security Review
+        # Learning
         # =====================================================
 
-        security_result = None
+        learning_result = None
 
-        security = get_agent(
-            "security_agent"
-        )
+        learner = get_agent("learner_agent")
 
-        if security:
+        if learner:
 
             try:
 
-                security_result = security.review(
-                    project_code
+                learning_result = learner.learn(
+                    project=project_name,
+                    review=review_result,
+                    testing=testing_result,
+                    reflection=reflection_result
                 )
 
             except Exception as e:
 
-                security_result = {
-
+                learning_result = {
                     "success": False,
-
                     "error": str(e)
+                }
 
-                } 
         # =====================================================
-        # Performance Review
+        # Version
         # =====================================================
-        performance_result = None
-        performance = get_agent(
-            "performance_agent"
-        )
-        if performance:
-
-            try:
-
-                performance_result = performance.analyze(
-                    project_code
-                )
-
-            except Exception as e:
-
-                performance_result = {
-
-                    "success": False,
-
-                    "error": str(e)
-                }                               
-        # =====================================================
-        # Load Project Source Code Once
-        # =====================================================
-
-        python_files = list(
-            Path(project_path).rglob("*.py")
-        )
-
-        project_code = ""
-
-        for file in python_files:
-
-            try:
-
-                project_code += file.read_text(
-                    encoding="utf-8"
-                )
-
-                project_code += "\n\n"
-
-            except Exception:
-                pass  
 
         version_result = None
 
-        version = get_agent(
-            "version_agent"
-        )
+        version = get_agent("version_agent")
 
         if version:
 
             try:
 
                 version_result = version.save(
-
                     project=project_name,
-
                     files=generated_files,
-
                     message="Initial Generated Project"
-
                 )
 
             except Exception as e:
 
                 version_result = {
-
                     "success": False,
-
                     "error": str(e)
+                }
 
-                }                 
         # =====================================================
         # GitHub
         # =====================================================
@@ -464,10 +419,6 @@ class ProjectBuilder:
         # =====================================================
         # Statistics
         # =====================================================
-
-        python_files = list(
-            Path(project_path).rglob("*.py")
-        )
 
         total_lines = 0
         total_size = 0
@@ -532,6 +483,8 @@ class ProjectBuilder:
             "review": review_result,
 
             "security": security_result,
+
+            "performance": performance_result,
 
             "testing": testing_result,
 

@@ -1,11 +1,11 @@
-from app.base_agent import BaseAgent
+from app.core.llm import llm
 
 from app.agents.performance.prompts import (
     SYSTEM_PROMPT
 )
 
 
-class PerformanceAgent(BaseAgent):
+class PerformanceAgent:
 
     def analyze(
         self,
@@ -20,7 +20,15 @@ Code:
 {code}
 """
 
-        return self.generate(prompt)
+        response = llm.invoke(prompt)
+
+        return {
+
+            "success": True,
+
+            "response": response.content
+
+        }
 
 
 performance_agent = PerformanceAgent()

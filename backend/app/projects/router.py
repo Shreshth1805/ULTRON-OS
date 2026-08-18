@@ -4,6 +4,8 @@ from fastapi import (
     HTTPException
 )
 
+from pydantic import BaseModel
+
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -20,11 +22,18 @@ from app.projects.service import (
     delete_project
 )
 
+from app.orchestration.project_builder import project_builder
+
 
 router = APIRouter(
     prefix="/projects",
     tags=["Projects"]
 )
+
+
+class ProjectBuildRequest(BaseModel):
+
+    prompt: str
 
 
 # =========================================================
@@ -42,6 +51,29 @@ def get_db():
     finally:
 
         db.close()
+
+
+# =========================================================
+# BUILD (full autonomous pipeline)
+# =========================================================
+
+@router.post(
+    "/build"
+)
+def build_project(
+    request: ProjectBuildRequest
+):
+
+    if not request.prompt or not request.prompt.strip():
+
+        raise HTTPException(
+            status_code=400,
+            detail="prompt must not be empty."
+        )
+
+    return project_builder.build(
+        request.prompt
+    )
 
 
 # =========================================================
