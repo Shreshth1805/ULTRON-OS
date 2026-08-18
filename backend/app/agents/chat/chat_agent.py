@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage
-from app.core.groq import llm
+from app.core.llm import llm
 from app.memory.manager import memory_manager
 
 
