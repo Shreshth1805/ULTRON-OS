@@ -8,6 +8,19 @@ __pycache__/
 .venv/
 env/
 venv/
+ultron/
+
+# Databases / vector stores (runtime data, not source)
+*.db
+*.sqlite3
+backend/vector_db/
+backend/vectorstore/
+
+# Runtime-generated artifacts
+backend/uploads/
+backend/ultron_models/
+backend/workspace/
+backend/ultron_workspace/
 
 # Conda
 .env
