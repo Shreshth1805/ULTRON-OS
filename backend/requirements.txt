@@ -32,3 +32,8 @@ python-jose[cryptography]
 passlib[bcrypt]
 bcrypt<4.1  # passlib's bcrypt backend self-test breaks on bcrypt>=4.1
 email-validator
+
+# Execution sandbox for generated projects (app/execution, app/agents/tester)
+# runs via this interpreter's own -m pytest / -m <entry module>, so these
+# need to be present here even though this app doesn't import them itself.
+pytest
