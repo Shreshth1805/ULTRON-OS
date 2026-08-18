@@ -1,18 +1,34 @@
 fastapi
 uvicorn
 sqlalchemy
-psycopg2-binary
-alembic
 python-dotenv
 pydantic
 pydantic-settings
-loguru
-redis
-celery
-langchain
-langgraph
-openai
-qdrant-client
-neo4j
 aiofiles
 python-multipart
+
+# LLM / RAG (actually imported by the reachable code path)
+langchain
+langchain-core
+langchain-groq
+langchain-community
+langchain-openai
+langchain-ollama
+langchain-huggingface
+langchain-nvidia-ai-endpoints
+langchain-text-splitters
+langchain-chroma
+sentence-transformers
+
+# Data / ML
+pandas
+scikit-learn
+
+# GitHub integration (app/github)
+PyGithub
+
+# Auth (app/api/auth.py, app/api/users.py)
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<4.1  # passlib's bcrypt backend self-test breaks on bcrypt>=4.1
+email-validator
