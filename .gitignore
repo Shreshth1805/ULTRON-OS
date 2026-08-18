@@ -21,6 +21,7 @@ backend/uploads/
 backend/ultron_models/
 backend/workspace/
 backend/ultron_workspace/
+backend/storage/
 
 # Conda
 .env

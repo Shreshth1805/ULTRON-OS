@@ -1,5 +1,6 @@
 from app.core.llm import llm
 from app.generators.prompts import SYSTEM_PROMPT
+from app.utils.text import strip_code_fence
 
 
 class FileGenerator:
@@ -24,7 +25,7 @@ Generate ONLY the contents of
 
         response = llm.invoke(prompt)
 
-        return response.content.strip()
+        return strip_code_fence(response.content)
 
 
 file_generator = FileGenerator()

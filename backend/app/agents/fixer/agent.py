@@ -20,7 +20,11 @@ class FixerAgent:
         error = None
 
         if isinstance(testing_result, dict):
-            error = testing_result.get("stderr") or testing_result.get("error")
+            results = testing_result.get("results")
+            if isinstance(results, dict):
+                error = results.get("stderr") or results.get("stdout") or results.get("error")
+            if not error:
+                error = testing_result.get("error")
 
         if not error:
             return {

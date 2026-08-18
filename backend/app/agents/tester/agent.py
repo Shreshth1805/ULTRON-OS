@@ -16,7 +16,7 @@ class TesterAgent:
 
         return {
 
-            "success": True,
+            "success": results.get("success", False),
 
             "generated_tests": tests,
 

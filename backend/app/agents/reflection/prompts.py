@@ -21,9 +21,9 @@ Review:
 
 Return JSON:
 
-{
+{{
   "summary":"",
   "risk_level":"",
   "improvements":[]
-}
+}}
 """

@@ -1,5 +1,6 @@
 from app.core.llm import llm
 from app.generators.prompts import SYSTEM_PROMPT
+from app.utils.text import strip_code_fence
 
 
 class ProjectGenerator:
@@ -35,7 +36,7 @@ Dockerfile
 
         files = []
 
-        for line in response.content.splitlines():
+        for line in strip_code_fence(response.content).splitlines():
 
             line = line.strip()
 

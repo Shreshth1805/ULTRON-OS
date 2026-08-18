@@ -3,6 +3,7 @@ from pathlib import Path
 from app.core.llm import llm
 
 from app.agents.tester.prompts import TEST_PROMPT
+from app.utils.text import strip_code_fence
 
 
 class TestGenerator:
@@ -35,7 +36,7 @@ class TestGenerator:
                 test_file = file.parent / f"test_{file.name}"
 
                 test_file.write_text(
-                    response.content,
+                    strip_code_fence(response.content),
                     encoding="utf-8"
                 )
 

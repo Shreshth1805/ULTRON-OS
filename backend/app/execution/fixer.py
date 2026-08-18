@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.core.llm import llm
+from app.utils.text import strip_code_fence
 
 
 class CodeFixer:
@@ -30,7 +31,7 @@ Return ONLY corrected code.
 
         response = llm.invoke(prompt)
 
-        fixed = response.content.strip()
+        fixed = strip_code_fence(response.content)
 
         Path(file_path).write_text(
             fixed,

@@ -315,7 +315,13 @@ def get_agent(name):
                 devops_agent
             )
 
-    except ImportError as e:
+    except Exception as e:
+
+        # Agent modules can fail to load for reasons other than a
+        # missing import (e.g. a module-level client that requires
+        # an API token which isn't configured) - treat any load-time
+        # failure the same way: log it and degrade gracefully instead
+        # of letting it crash the caller.
 
         print(
             f"[Registry] Failed to load "
